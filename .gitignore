@@ -5,6 +5,11 @@ yarn-debug.log*
 yarn-error.log*
 package-lock.json
 
+# Plasmo build outputs
+build/
+.plasmo/
+dist/
+
 # Playwright test results and artifacts
 test-results/
 playwright-report/

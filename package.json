@@ -2,17 +2,38 @@
   "name": "weibo-like-plugin",
   "version": "1.0.0",
   "description": "微博控评助手 - 自动在微博评论中查找关键词并点赞的Chrome插件",
+  "displayName": "微博控评助手",
   "scripts": {
+    "dev": "plasmo dev",
+    "build": "plasmo build",
+    "package": "plasmo package",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:ui": "playwright test --ui"
   },
   "dependencies": {
-    "browser-use": "^0.0.1"
+    "antd": "^5.12.8",
+    "browser-use": "^0.0.1",
+    "plasmo": "^0.90.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sharp": "^0.34.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
-    "playwright": "^1.49.1"
+    "@types/chrome": "^0.0.251",
+    "@types/node": "^20.10.5",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "playwright": "^1.49.1",
+    "typescript": "^5.3.3"
+  },
+  "manifest": {
+    "host_permissions": [
+      "https://weibo.com/*",
+      "https://m.weibo.cn/*",
+      "https://www.weibo.com/*"
+    ]
   }
 }
