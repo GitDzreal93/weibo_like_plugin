@@ -13,6 +13,7 @@
     "test:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.0.0",
     "antd": "^5.12.8",
     "browser-use": "^0.0.1",
     "plasmo": "^0.90.5",
@@ -30,6 +31,12 @@
     "typescript": "^5.3.3"
   },
   "manifest": {
+    "permissions": [
+      "tabs",
+      "scripting",
+      "storage",
+      "activeTab"
+    ],
     "host_permissions": [
       "https://weibo.com/*",
       "https://m.weibo.cn/*",
