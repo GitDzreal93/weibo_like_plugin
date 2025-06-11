@@ -1,0 +1,18 @@
+{
+  "name": "weibo-like-plugin",
+  "version": "1.0.0",
+  "description": "微博控评助手 - 自动在微博评论中查找关键词并点赞的Chrome插件",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "browser-use": "^0.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "playwright": "^1.49.1"
+  }
+}

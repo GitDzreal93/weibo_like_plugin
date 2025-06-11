@@ -1,13 +1,12 @@
-// 微博页面内容脚本 - 使用 Playwright 最佳实践改进
-console.log('Content script loaded on:', window.location.href);
-let isTaskRunning = false;
-let taskSettings = {};
+/**
+ * 现代化的元素查找工具
+ * 基于 Playwright 的最佳实践，但适用于浏览器环境
+ */
 
-// 导入现代化元素查找器
 class ModernElementFinder {
   constructor() {
     this.selectors = {
-      // 评论文本选择器（按优先级排序，基于 Playwright 测试结果）
+      // 评论文本选择器（按优先级排序）
       commentText: [
         '[data-testid="comment-item"] .comment-text',
         '[class*="CommentItem"] [class*="text"]',
@@ -21,8 +20,8 @@ class ModernElementFinder {
         '[class*="comment"] [class*="text"]',
         '[class*="Comment"] [class*="Text"]'
       ],
-
-      // 点赞按钮选择器（基于 Playwright 测试验证）
+      
+      // 点赞按钮选择器
       likeButton: [
         '[data-testid="like-button"]',
         '[aria-label*="点赞"]',
@@ -42,7 +41,7 @@ class ModernElementFinder {
         '[class*="thumb"]',
         '[class*="heart"]'
       ],
-
+      
       // 评论容器选择器
       commentContainer: [
         '[data-testid="comment-list"]',
@@ -55,7 +54,7 @@ class ModernElementFinder {
         '[class*="Feed"]'
       ]
     };
-
+    
     this.likedIndicators = ['WB_praised', 'praised', 'liked', 'active', 'selected'];
   }
 
@@ -64,28 +63,28 @@ class ModernElementFinder {
    */
   async waitForElement(selector, options = {}) {
     const { timeout = 10000, visible = true } = options;
-
+    
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
-
+      
       const checkElement = () => {
         const element = document.querySelector(selector);
-
+        
         if (element) {
           if (!visible || this.isElementVisible(element)) {
             resolve(element);
             return;
           }
         }
-
+        
         if (Date.now() - startTime > timeout) {
           reject(new Error(`元素 ${selector} 在 ${timeout}ms 内未找到`));
           return;
         }
-
+        
         setTimeout(checkElement, 100);
       };
-
+      
       checkElement();
     });
   }
@@ -95,10 +94,10 @@ class ModernElementFinder {
    */
   async waitForAnyElement(selectors, options = {}) {
     const { timeout = 10000 } = options;
-
+    
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
-
+      
       const checkElements = () => {
         for (const selector of selectors) {
           const element = document.querySelector(selector);
@@ -107,15 +106,15 @@ class ModernElementFinder {
             return;
           }
         }
-
+        
         if (Date.now() - startTime > timeout) {
           reject(new Error(`所有选择器在 ${timeout}ms 内都未找到元素`));
           return;
         }
-
+        
         setTimeout(checkElements, 100);
       };
-
+      
       checkElements();
     });
   }
@@ -126,39 +125,39 @@ class ModernElementFinder {
   async findComments(options = {}) {
     const { keyword, maxResults = 50 } = options;
     const comments = [];
-
+    
     // 首先尝试等待评论容器加载
     try {
       await this.waitForAnyElement(this.selectors.commentContainer, { timeout: 5000 });
     } catch (error) {
       console.log('评论容器未找到，继续尝试其他方法');
     }
-
+    
     // 尝试各种评论选择器
     for (const selector of this.selectors.commentText) {
       const elements = document.querySelectorAll(selector);
-
+      
       for (const element of elements) {
         if (comments.length >= maxResults) break;
-
+        
         const commentData = await this.extractCommentData(element, keyword);
         if (commentData) {
           comments.push(commentData);
         }
       }
-
+      
       if (comments.length > 0) {
         console.log(`使用选择器 ${selector} 找到 ${comments.length} 条评论`);
         break;
       }
     }
-
+    
     // 如果还没找到，使用文本搜索
     if (comments.length === 0 && keyword) {
       const keywordComments = await this.findCommentsByText(keyword);
       comments.push(...keywordComments);
     }
-
+    
     return comments;
   }
 
@@ -179,7 +178,7 @@ class ModernElementFinder {
         }
       }
     );
-
+    
     let node;
     while (node = walker.nextNode()) {
       const element = node.parentElement;
@@ -190,7 +189,7 @@ class ModernElementFinder {
         }
       }
     }
-
+    
     return comments;
   }
 
@@ -200,13 +199,13 @@ class ModernElementFinder {
   async extractCommentData(element, keyword = null) {
     const text = element.textContent?.trim();
     if (!text || text.length < 5) return null;
-
+    
     // 如果指定了关键词，检查是否包含
     if (keyword && !text.includes(keyword)) return null;
-
+    
     // 查找点赞按钮
     const likeButton = await this.findLikeButton(element);
-
+    
     return {
       element,
       text,
@@ -222,11 +221,11 @@ class ModernElementFinder {
   async findLikeButton(commentElement) {
     // 从评论元素向上查找包含点赞按钮的容器
     let container = commentElement;
-
+    
     for (let level = 0; level < 8; level++) {
       if (!container || !container.parentElement) break;
       container = container.parentElement;
-
+      
       // 在当前容器中查找点赞按钮
       for (const selector of this.selectors.likeButton) {
         const button = container.querySelector(selector);
@@ -235,7 +234,7 @@ class ModernElementFinder {
         }
       }
     }
-
+    
     return null;
   }
 
@@ -244,10 +243,10 @@ class ModernElementFinder {
    */
   isElementVisible(element) {
     if (!element) return false;
-
+    
     const style = window.getComputedStyle(element);
     const rect = element.getBoundingClientRect();
-
+    
     return style.display !== 'none' &&
            style.visibility !== 'hidden' &&
            style.opacity !== '0' &&
@@ -260,12 +259,12 @@ class ModernElementFinder {
    */
   isClickableElement(element) {
     if (!element || !this.isElementVisible(element)) return false;
-
+    
     const style = window.getComputedStyle(element);
     return !element.disabled &&
            style.pointerEvents !== 'none' &&
-           (element.tagName === 'BUTTON' ||
-            element.tagName === 'A' ||
+           (element.tagName === 'BUTTON' || 
+            element.tagName === 'A' || 
             element.onclick ||
             element.getAttribute('role') === 'button' ||
             style.cursor === 'pointer');
@@ -276,23 +275,23 @@ class ModernElementFinder {
    */
   checkIfLiked(likeButton) {
     if (!likeButton) return false;
-
+    
     // 检查类名指示器
     for (const indicator of this.likedIndicators) {
       if (likeButton.classList.contains(indicator)) {
         return true;
       }
     }
-
+    
     // 检查颜色变化
     const style = window.getComputedStyle(likeButton);
     const color = style.color;
-    if (color.includes('rgb(255') || color.includes('#ff') ||
+    if (color.includes('rgb(255') || color.includes('#ff') || 
         color.includes('#f4') || color.includes('orange') ||
         color.includes('red')) {
       return true;
     }
-
+    
     return false;
   }
 
@@ -301,21 +300,21 @@ class ModernElementFinder {
    */
   async safeClick(element, options = {}) {
     const { scrollIntoView = true, delay = 500 } = options;
-
+    
     if (!element || !this.isClickableElement(element)) {
       throw new Error('元素不可点击');
     }
-
+    
     if (scrollIntoView) {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await this.sleep(delay);
     }
-
+    
     // 模拟真实用户点击
     const rect = element.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
-
+    
     // 触发鼠标事件序列
     const events = ['mousedown', 'mouseup', 'click'];
     for (const eventType of events) {
@@ -328,7 +327,7 @@ class ModernElementFinder {
       element.dispatchEvent(event);
       await this.sleep(50);
     }
-
+    
     return true;
   }
 
@@ -340,244 +339,9 @@ class ModernElementFinder {
   }
 }
 
-// 创建全局实例
-const modernFinder = new ModernElementFinder();
-
-// 监听来自background的消息
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    console.log('Content script received message:', message);
-
-    if (message.action === 'executeTask') {
-        if (!isTaskRunning) {
-            console.log('Starting task execution...');
-            executeTask(message.settings);
-        } else {
-            console.log('Task already running, ignoring...');
-        }
-    }
-
-    // 发送响应确认消息已收到
-    sendResponse({received: true});
-});
-
-// 执行主要任务 - 使用现代化元素查找器
-async function executeTask(settings) {
-    isTaskRunning = true;
-    taskSettings = settings;
-
-    try {
-        sendProgress('开始分析页面...', 'info');
-        sendProgress(`当前页面URL: ${window.location.href}`, 'info');
-
-        // 等待页面完全加载
-        await waitForPageLoad();
-        sendProgress('页面加载完成', 'info');
-
-        // 等待额外时间让动态内容加载
-        await modernFinder.sleep(3000);
-        sendProgress('开始查找评论区...', 'info');
-
-        // 使用现代化方法查找评论区
-        const comments = await modernFinder.findComments({
-            keyword: settings.keyword,
-            maxResults: 100
-        });
-
-        if (comments.length === 0) {
-            sendProgress('未找到评论区，尝试滚动页面加载更多内容...', 'warning');
-
-            // 尝试滚动页面加载评论
-            window.scrollTo(0, document.body.scrollHeight);
-            await modernFinder.sleep(2000);
-
-            // 再次尝试查找评论
-            const commentsAfterScroll = await modernFinder.findComments({
-                keyword: settings.keyword,
-                maxResults: 100
-            });
-
-            if (commentsAfterScroll.length === 0) {
-                sendProgress('仍未找到评论区，可能页面结构已变化', 'error');
-                completeTask();
-                return;
-            }
-            comments.push(...commentsAfterScroll);
-        }
-
-        sendProgress(`找到${comments.length}条评论`, 'info');
-
-        // 筛选包含关键词且未点赞的评论
-        const targetComments = comments.filter(comment => {
-            return comment.text.includes(settings.keyword) &&
-                   comment.likeButton &&
-                   !comment.isLiked;
-        });
-
-        if (targetComments.length === 0) {
-            sendProgress(`未找到包含"${settings.keyword}"的可点赞评论`, 'warning');
-            completeTask();
-            return;
-        }
-
-        sendProgress(`找到${targetComments.length}条包含关键词的可点赞评论`, 'info');
-
-        // 点赞评论
-        const maxLikes = Math.min(targetComments.length, settings.maxLikes);
-        let likedCount = 0;
-
-        for (let i = 0; i < maxLikes; i++) {
-            const comment = targetComments[i];
-
-            try {
-                // 使用现代化的安全点击方法
-                await modernFinder.safeClick(comment.likeButton, {
-                    scrollIntoView: true,
-                    delay: 500
-                });
-
-                // 等待一下检查是否点赞成功
-                await modernFinder.sleep(1000);
-
-                // 检查点赞状态
-                const isNowLiked = modernFinder.checkIfLiked(comment.likeButton);
-
-                if (isNowLiked) {
-                    likedCount++;
-                    sendProgress(`成功点赞第${likedCount}条评论: ${comment.text.substring(0, 30)}...`, 'success');
-                } else {
-                    sendProgress(`点赞第${i + 1}条评论可能失败`, 'warning');
-                }
-
-            } catch (error) {
-                sendProgress(`点赞第${i + 1}条评论失败: ${error.message}`, 'warning');
-            }
-
-            // 添加延迟避免被检测
-            if (i < maxLikes - 1) {
-                await modernFinder.sleep(settings.interval);
-            }
-        }
-
-        sendProgress(`任务完成，共点赞${likedCount}条评论`, 'success');
-        completeTask();
-
-    } catch (error) {
-        sendProgress(`任务执行出错: ${error.message}`, 'error');
-        chrome.runtime.sendMessage({
-            action: 'taskError',
-            error: error.message
-        });
-    } finally {
-        isTaskRunning = false;
-    }
-}
-
-// 等待页面加载
-function waitForPageLoad() {
-    return new Promise((resolve) => {
-        if (document.readyState === 'complete') {
-            resolve();
-        } else {
-            window.addEventListener('load', resolve);
-        }
-    });
-}
-
-// 旧版查找评论函数 - 已被现代化方法替代，保留作为备用
-async function findCommentsLegacy() {
-    sendProgress('使用传统方法查找评论区...', 'info');
-
-    // 使用现代化查找器作为主要方法
-    return await modernFinder.findComments({
-        keyword: taskSettings.keyword,
-        maxResults: 100
-    });
-}
-
-// 分析页面结构 - 简化版本
-async function analyzePageStructure() {
-    sendProgress('开始分析页面结构...', 'info');
-
-    // 使用现代化查找器分析页面
-    try {
-        const containerFound = await modernFinder.waitForAnyElement(
-            modernFinder.selectors.commentContainer,
-            { timeout: 3000 }
-        );
-        sendProgress(`找到评论容器: ${containerFound.selector}`, 'info');
-    } catch (error) {
-        sendProgress('未找到标准评论容器，将使用通用方法', 'warning');
-    }
-
-    // 统计页面元素
-    const allElements = document.querySelectorAll('*');
-    const textElements = Array.from(allElements).filter(el => {
-        const text = el.textContent?.trim();
-        return text && text.length > 10;
-    }).length;
-
-    sendProgress(`页面分析: 共${allElements.length}个元素, ${textElements}个文本元素`, 'info');
-}
-
-// 旧版函数已被现代化方法替代，保留部分作为备用
-
-// 简化的等待元素函数 - 备用方法
-
-// 等待元素出现
-function waitForElement(selector, timeout = 5000) {
-    return new Promise((resolve, reject) => {
-        const element = document.querySelector(selector);
-        if (element) {
-            resolve(element);
-            return;
-        }
-
-        const observer = new MutationObserver((_mutations, obs) => {
-            const element = document.querySelector(selector);
-            if (element) {
-                obs.disconnect();
-                resolve(element);
-            }
-        });
-
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-
-        setTimeout(() => {
-            observer.disconnect();
-            reject(new Error(`元素 ${selector} 未找到`));
-        }, timeout);
-    });
-}
-
-// 延迟函数
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// 发送进度更新
-function sendProgress(message, type = 'info') {
-    console.log(`[${type}] ${message}`);
-    try {
-        chrome.runtime.sendMessage({
-            action: 'updateProgress',
-            data: { message, type }
-        });
-    } catch (error) {
-        console.error('Failed to send progress message:', error);
-    }
-}
-
-// 完成任务
-function completeTask() {
-    console.log('Task completed');
-    try {
-        chrome.runtime.sendMessage({
-            action: 'taskComplete'
-        });
-    } catch (error) {
-        console.error('Failed to send task complete message:', error);
-    }
+// 导出给浏览器环境使用
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { ModernElementFinder };
+} else {
+  window.ModernElementFinder = ModernElementFinder;
 }

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微博测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .weibo-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .comment-list {
+            margin-top: 20px;
+        }
+        .comment-item {
+            border-bottom: 1px solid #eee;
+            padding: 15px 0;
+        }
+        .comment-text {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .comment-toolbar {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .like-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+        .like-button:hover {
+            background-color: #f0f0f0;
+        }
+        .like-button.liked {
+            color: #ff6b6b;
+            background-color: #ffe0e0;
+        }
+        .WB_feed_detail .WB_text {
+            color: #333;
+            font-size: 14px;
+        }
+        .WB_func .ficon_praise {
+            color: #666;
+            cursor: pointer;
+        }
+        .WB_func .ficon_praise.WB_praised {
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="weibo-container">
+        <h1>微博评论测试页面</h1>
+        
+        <div class="comment-list">
+            <div class="comment-item">
+                <div class="comment-text WB_text">
+                    这是一条包含陈昊宇关键词的测试评论，用于测试元素定位功能。
+                </div>
+                <div class="comment-toolbar WB_func">
+                    <button class="like-button ficon_praise" aria-label="点赞" title="点赞">
+                        ❤️ 点赞
+                    </button>
+                    <span>回复</span>
+                    <span>转发</span>
+                </div>
+            </div>
+            
+            <div class="comment-item">
+                <div class="comment-text WB_text">
+                    另一条评论，不包含关键词，但可以用来测试选择器的准确性。
+                </div>
+                <div class="comment-toolbar WB_func">
+                    <button class="like-button ficon_praise liked WB_praised" aria-label="取消点赞" title="取消点赞">
+                        ❤️ 已点赞
+                    </button>
+                    <span>回复</span>
+                    <span>转发</span>
+                </div>
+            </div>
+            
+            <div class="comment-item">
+                <div class="comment-text WB_text">
+                    第三条评论也包含陈昊宇这个关键词，可以用来测试批量操作。
+                </div>
+                <div class="comment-toolbar WB_func">
+                    <button class="like-button ficon_praise" aria-label="点赞" title="点赞">
+                        ❤️ 点赞
+                    </button>
+                    <span>回复</span>
+                    <span>转发</span>
+                </div>
+            </div>
+            
+            <!-- 新版微博样式 -->
+            <div class="comment-item" data-testid="comment-item">
+                <div class="comment-text CommentItem_text">
+                    这是新版微博样式的评论，包含陈昊宇关键词，测试现代选择器。
+                </div>
+                <div class="comment-toolbar">
+                    <button class="like-button" data-testid="like-button" aria-label="点赞">
+                        👍 点赞
+                    </button>
+                    <span>回复</span>
+                    <span>转发</span>
+                </div>
+            </div>
+            
+            <div class="comment-item Feed_detail">
+                <div class="comment-text CommentItem_text">
+                    Feed详情页样式的评论，也包含陈昊宇关键词。
+                </div>
+                <div class="comment-toolbar toolbar_item">
+                    <button class="like-button like" title="点赞">
+                        💖 点赞
+                    </button>
+                    <span>回复</span>
+                    <span>转发</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟点赞功能
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('like-button') || e.target.closest('.like-button')) {
+                const button = e.target.classList.contains('like-button') ? e.target : e.target.closest('.like-button');
+                
+                if (button.classList.contains('liked') || button.classList.contains('WB_praised')) {
+                    // 取消点赞
+                    button.classList.remove('liked', 'WB_praised');
+                    button.setAttribute('aria-label', '点赞');
+                    button.setAttribute('title', '点赞');
+                    button.style.color = '';
+                    button.style.backgroundColor = '';
+                } else {
+                    // 点赞
+                    button.classList.add('liked', 'WB_praised');
+                    button.setAttribute('aria-label', '取消点赞');
+                    button.setAttribute('title', '取消点赞');
+                    button.style.color = '#ff6b6b';
+                    button.style.backgroundColor = '#ffe0e0';
+                }
+            }
+        });
+        
+        // 模拟动态加载内容
+        setTimeout(() => {
+            const commentList = document.querySelector('.comment-list');
+            const newComment = document.createElement('div');
+            newComment.className = 'comment-item';
+            newComment.innerHTML = `
+                <div class="comment-text WB_text">
+                    动态加载的评论，包含陈昊宇关键词，测试滚动加载功能。
+                </div>
+                <div class="comment-toolbar WB_func">
+                    <button class="like-button ficon_praise" aria-label="点赞" title="点赞">
+                        ❤️ 点赞
+                    </button>
+                    <span>回复</span>
+                    <span>转发</span>
+                </div>
+            `;
+            commentList.appendChild(newComment);
+        }, 2000);
+    </script>
+</body>
+</html>
