@@ -270,14 +270,14 @@ class ModernElementFinder {
    */
   isClickableElement(element: Element): boolean {
     if (!element || !this.isElementVisible(element)) return false
-    
+
     const htmlElement = element as HTMLElement
     const style = window.getComputedStyle(element)
     return !htmlElement.hasAttribute('disabled') &&
            style.pointerEvents !== 'none' &&
-           (element.tagName === 'BUTTON' || 
-            element.tagName === 'A' || 
-            htmlElement.onclick ||
+           (element.tagName === 'BUTTON' ||
+            element.tagName === 'A' ||
+            !!htmlElement.onclick ||
             element.getAttribute('role') === 'button' ||
             style.cursor === 'pointer')
   }
@@ -354,21 +354,31 @@ class ModernElementFinder {
 // 创建全局实例
 const modernFinder = new ModernElementFinder()
 
-// 监听来自background的消息
+// 监听来自background的消息 - 添加错误处理
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   console.log('Content script received message:', message)
 
-  if (message.action === 'executeTask') {
-    if (!isTaskRunning) {
-      console.log('Starting task execution...')
-      executeTask(message.settings)
-    } else {
-      console.log('Task already running, ignoring...')
+  try {
+    if (message.action === 'executeTask') {
+      if (!isTaskRunning) {
+        console.log('Starting task execution...')
+        executeTask(message.settings).catch(error => {
+          console.error('Task execution failed:', error)
+          sendProgress(`任务执行失败: ${error.message}`, 'error')
+        })
+      } else {
+        console.log('Task already running, ignoring...')
+      }
     }
+
+    // 发送响应确认消息已收到
+    sendResponse({ received: true })
+  } catch (error) {
+    console.error('Error in message listener:', error)
+    sendResponse({ received: false, error: error.message })
   }
 
-  // 发送响应确认消息已收到
-  sendResponse({ received: true })
+  return true // 保持消息通道开放
 })
 
 // 执行主要任务 - 使用现代化元素查找器
@@ -494,26 +504,40 @@ function waitForPageLoad(): Promise<void> {
   })
 }
 
-// 发送进度更新
+// 发送进度更新 - 添加上下文检查
 function sendProgress(message: string, type: string = 'info') {
   console.log(`[${type}] ${message}`)
   try {
-    chrome.runtime.sendMessage({
-      action: 'updateProgress',
-      data: { message, type }
-    })
+    // 检查扩展上下文是否有效
+    if (chrome.runtime?.id) {
+      chrome.runtime.sendMessage({
+        action: 'updateProgress',
+        data: { message, type }
+      }).catch(error => {
+        console.error('Failed to send progress message:', error)
+      })
+    } else {
+      console.warn('Extension context invalidated, cannot send progress message')
+    }
   } catch (error) {
     console.error('Failed to send progress message:', error)
   }
 }
 
-// 完成任务
+// 完成任务 - 添加上下文检查
 function completeTask() {
   console.log('Task completed')
   try {
-    chrome.runtime.sendMessage({
-      action: 'taskComplete'
-    })
+    // 检查扩展上下文是否有效
+    if (chrome.runtime?.id) {
+      chrome.runtime.sendMessage({
+        action: 'taskComplete'
+      }).catch(error => {
+        console.error('Failed to send task complete message:', error)
+      })
+    } else {
+      console.warn('Extension context invalidated, cannot send task complete message')
+    }
   } catch (error) {
     console.error('Failed to send task complete message:', error)
   }

@@ -234,19 +234,49 @@ async function openWeiboTab(url: string): Promise<chrome.tabs.Tab | null> {
   }
 }
 
-// 执行内容脚本
+// 等待标签页准备就绪
+async function waitForTabReady(tabId: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const checkTab = async () => {
+      try {
+        const tab = await chrome.tabs.get(tabId)
+        if (tab.status === 'complete') {
+          resolve()
+        } else {
+          setTimeout(checkTab, 500)
+        }
+      } catch (error) {
+        reject(error)
+      }
+    }
+    checkTab()
+  })
+}
+
+// 执行内容脚本 - 修复文件名和错误处理
 async function executeContentScript(tabId: number, settings: any) {
   try {
     console.log('Injecting content script into tab:', tabId)
 
-    // 注入内容脚本（如果还没有注入）
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['weibo-automation.ab4ecfb0.js']
-    })
+    // 等待标签页完全加载
+    await waitForTabReady(tabId)
 
-    console.log('Content script injected successfully')
-    addLog('内容脚本注入成功', 'info')
+    // 注入内容脚本（Plasmo 会自动处理文件名）
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['contents/weibo-automation.js']
+      })
+    } catch (error) {
+      // 如果文件不存在，说明 Plasmo 可能使用了不同的文件名
+      console.warn('Failed to inject with standard name, content script may already be injected:', error.message)
+    }
+
+    console.log('Content script injection attempted')
+    addLog('内容脚本注入尝试完成', 'info')
+
+    // 等待一下确保脚本完全加载
+    await sleep(1000)
 
     // 发送执行任务消息
     console.log('Sending executeTask message to content script')
