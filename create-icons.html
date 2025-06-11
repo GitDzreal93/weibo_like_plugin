@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>生成插件图标</title>
+    <style>
+        .icon {
+            display: inline-block;
+            margin: 10px;
+            text-align: center;
+        }
+        .icon-canvas {
+            border: 1px solid #ccc;
+            background: linear-gradient(45deg, #1890ff, #40a9ff);
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+        }
+        .icon-16 { width: 16px; height: 16px; font-size: 8px; }
+        .icon-48 { width: 48px; height: 48px; font-size: 20px; }
+        .icon-128 { width: 128px; height: 128px; font-size: 48px; }
+    </style>
+</head>
+<body>
+    <h1>微博控评助手 - 插件图标</h1>
+    <p>请使用截图工具保存以下图标为PNG格式：</p>
+    
+    <div class="icon">
+        <div class="icon-canvas icon-16">微</div>
+        <div>icon16.png (16x16)</div>
+    </div>
+    
+    <div class="icon">
+        <div class="icon-canvas icon-48">微</div>
+        <div>icon48.png (48x48)</div>
+    </div>
+    
+    <div class="icon">
+        <div class="icon-canvas icon-128">微</div>
+        <div>icon128.png (128x128)</div>
+    </div>
+    
+    <script>
+        // 可以使用这个脚本将canvas转换为图片
+        function downloadIcon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // 绘制渐变背景
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#1890ff');
+            gradient.addColorStop(1, '#40a9ff');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // 绘制文字
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${size * 0.6}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('微', size / 2, size / 2);
+            
+            // 下载图片
+            const link = document.createElement('a');
+            link.download = `icon${size}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        // 添加下载按钮
+        document.body.innerHTML += `
+            <div style="margin-top: 20px;">
+                <button onclick="downloadIcon(16)">下载 16x16 图标</button>
+                <button onclick="downloadIcon(48)">下载 48x48 图标</button>
+                <button onclick="downloadIcon(128)">下载 128x128 图标</button>
+            </div>
+        `;
+    </script>
+</body>
+</html>
