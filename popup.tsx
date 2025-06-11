@@ -377,6 +377,20 @@ function IndexPopup() {
         微博控评助手
       </Title>
 
+      {/* 功能提示 */}
+      <div style={{
+        backgroundColor: '#e6f7ff',
+        border: '1px solid #91d5ff',
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 12,
+        fontSize: 12
+      }}>
+        <div style={{ fontWeight: 'bold', marginBottom: 4 }}>💡 功能提示</div>
+        <div>• 微博评论自动点赞：在下方配置后执行</div>
+        <div>• 聊天页面链接复制：访问 api.weibo.com/chat 时自动启用</div>
+      </div>
+
       {/* 设置区域 */}
       <Card title="设置" size="small" style={{ marginBottom: 12 }}>
         <Space direction="vertical" style={{ width: '100%' }} size="small">

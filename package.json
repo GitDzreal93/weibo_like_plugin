@@ -40,7 +40,8 @@
     "host_permissions": [
       "https://weibo.com/*",
       "https://m.weibo.cn/*",
-      "https://www.weibo.com/*"
+      "https://www.weibo.com/*",
+      "https://api.weibo.com/*"
     ]
   }
 }

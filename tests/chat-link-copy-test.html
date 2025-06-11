@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微博聊天页面链接复制功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .chat-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .message {
+            margin: 10px 0;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #1890ff;
+        }
+        .message-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .link-text {
+            color: #1890ff;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .test-info {
+            background: #fff7e6;
+            border: 1px solid #ffd591;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+        .test-case {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+        }
+        .test-case h4 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>微博聊天页面链接复制功能测试</h1>
+    
+    <div class="test-info">
+        <strong>测试说明：</strong>
+        <br>1. 此页面模拟微博聊天页面的消息结构
+        <br>2. 安装插件后，包含"网页链接"的消息右侧应该出现复制图标
+        <br>3. 点击复制图标可以复制对应的链接地址
+        <br>4. 需要将此页面的 URL 修改为 api.weibo.com/chat 域名才能触发插件功能
+    </div>
+
+    <div class="chat-container">
+        <h2>聊天消息测试</h2>
+        
+        <div class="test-case">
+            <h4>测试用例 1: 包含网页链接的消息</h4>
+            <div class="message" data-link="https://weibo.com/6623521716/5176315180748087">
+                <div class="message-content">
+                    <span>这里有一个网页链接，请查看：<a href="https://weibo.com/6623521716/5176315180748087" class="link-text">https://weibo.com/6623521716/5176315180748087</a></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-case">
+            <h4>测试用例 2: 另一个包含网页链接的消息</h4>
+            <div class="message" data-url="https://api.weibo.com/some/api/endpoint">
+                <div class="message-content">
+                    <span>分享一个网页链接给你看看 https://api.weibo.com/some/api/endpoint</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-case">
+            <h4>测试用例 3: 不包含网页链接的消息（不应该有复制按钮）</h4>
+            <div class="message">
+                <div class="message-content">
+                    <span>这是一条普通的聊天消息，没有任何链接。</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-case">
+            <h4>测试用例 4: 包含网页链接但链接在 data 属性中</h4>
+            <div class="message" data-link-url="https://github.com/example/repo">
+                <div class="message-content">
+                    <span>这条消息包含网页链接，但链接存储在 data 属性中</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-case">
+            <h4>测试用例 5: 动态添加的消息</h4>
+            <div id="dynamic-messages">
+                <!-- 动态消息将在这里添加 -->
+            </div>
+            <button onclick="addDynamicMessage()" style="margin-top: 10px; padding: 8px 16px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                添加动态消息
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 模拟动态添加消息的功能
+        let messageCount = 0;
+        
+        function addDynamicMessage() {
+            messageCount++;
+            const container = document.getElementById('dynamic-messages');
+            const message = document.createElement('div');
+            message.className = 'message';
+            message.setAttribute('data-dynamic-link', `https://example.com/dynamic/${messageCount}`);
+            message.innerHTML = `
+                <div class="message-content">
+                    <span>动态消息 ${messageCount}：这里有一个网页链接 https://example.com/dynamic/${messageCount}</span>
+                </div>
+            `;
+            container.appendChild(message);
+        }
+
+        // 页面加载完成后的提示
+        window.addEventListener('load', function() {
+            console.log('测试页面加载完成');
+            console.log('当前 URL:', window.location.href);
+            console.log('如果要测试插件功能，请确保：');
+            console.log('1. 插件已安装并启用');
+            console.log('2. 页面 URL 包含 api.weibo.com/chat');
+            console.log('3. 查看包含"网页链接"的消息是否出现复制按钮');
+        });
+
+        // 模拟页面 URL 变化（仅用于测试）
+        function simulateWeiboChat() {
+            // 这个函数可以用来测试 URL 检测逻辑
+            console.log('模拟微博聊天页面环境');
+            
+            // 创建一个提示
+            const notice = document.createElement('div');
+            notice.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #52c41a;
+                color: white;
+                padding: 12px;
+                border-radius: 4px;
+                z-index: 9999;
+                font-size: 14px;
+            `;
+            notice.textContent = '模拟微博聊天环境已激活';
+            document.body.appendChild(notice);
+            
+            setTimeout(() => {
+                document.body.removeChild(notice);
+            }, 3000);
+        }
+
+        // 添加测试按钮
+        const testButton = document.createElement('button');
+        testButton.textContent = '模拟微博聊天环境';
+        testButton.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 9999;
+        `;
+        testButton.onclick = simulateWeiboChat;
+        document.body.appendChild(testButton);
+    </script>
+</body>
+</html>
