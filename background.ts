@@ -212,21 +212,46 @@ async function stopTask() {
   addLog('任务已停止', 'warning')
 }
 
-// 打开微博标签页
+// 智能打开微博标签页
 async function openWeiboTab(url: string): Promise<chrome.tabs.Tab | null> {
   try {
     console.log('Attempting to open URL:', url)
 
-    // 查找是否已有相同的标签页
-    const tabs = await chrome.tabs.query({ url: url })
+    // 清理URL以便比较
+    const cleanUrl = cleanWeiboUrl(url)
+    console.log('Cleaned URL:', cleanUrl)
 
-    if (tabs.length > 0) {
-      console.log('Found existing tab, switching to it:', tabs[0].id)
+    // 首先检查当前活动标签页是否就是目标页面
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+
+    if (activeTab && activeTab.url) {
+      const activeCleanUrl = cleanWeiboUrl(activeTab.url)
+      console.log('Active tab URL:', activeCleanUrl)
+
+      if (activeCleanUrl === cleanUrl) {
+        console.log('Current active tab is already the target page, using it:', activeTab.id)
+        addLog('当前标签页就是目标页面，直接使用', 'info')
+        return activeTab
+      }
+    }
+
+    // 查找是否已有相同的标签页
+    const allTabs = await chrome.tabs.query({})
+    const matchingTabs = allTabs.filter(tab => {
+      if (!tab.url) return false
+      const tabCleanUrl = cleanWeiboUrl(tab.url)
+      return tabCleanUrl === cleanUrl
+    })
+
+    if (matchingTabs.length > 0) {
+      console.log('Found existing tab, switching to it:', matchingTabs[0].id)
+      addLog('找到已存在的标签页，切换到该页面', 'info')
       // 切换到已存在的标签页
-      await chrome.tabs.update(tabs[0].id!, { active: true })
-      return tabs[0]
+      await chrome.tabs.update(matchingTabs[0].id!, { active: true })
+      return matchingTabs[0]
     } else {
       console.log('Creating new tab for URL:', url)
+      addLog('创建新标签页', 'info')
       // 创建新标签页
       const tab = await chrome.tabs.create({ url: url, active: true })
       console.log('Created new tab:', tab.id)
@@ -343,12 +368,31 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// 清理微博URL，移除不必要的参数
+// 清理微博URL，移除不必要的参数，用于URL比较
 function cleanWeiboUrl(url: string): string {
   try {
     const urlObj = new URL(url)
-    // 只保留基本路径，移除所有查询参数
-    return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`
+
+    // 标准化主机名
+    let hostname = urlObj.hostname
+    if (hostname === 'm.weibo.cn') {
+      hostname = 'weibo.com'
+    }
+
+    // 获取路径并移除末尾的斜杠
+    let pathname = urlObj.pathname.replace(/\/$/, '')
+
+    // 对于微博详情页，提取核心ID部分
+    // 例如：/5185196272/5176353147060619 或 /u/5185196272/5176353147060619
+    const weiboDetailMatch = pathname.match(/\/(?:u\/)?(\d+)\/(\d+)/)
+    if (weiboDetailMatch) {
+      pathname = `/${weiboDetailMatch[1]}/${weiboDetailMatch[2]}`
+    }
+
+    // 只保留基本路径，移除所有查询参数和片段
+    const cleanedUrl = `https://${hostname}${pathname}`
+    console.log(`URL cleaned: ${url} -> ${cleanedUrl}`)
+    return cleanedUrl
   } catch (error) {
     console.error('Invalid URL format:', url, error)
     return url // 如果解析失败，返回原URL

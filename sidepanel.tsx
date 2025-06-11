@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Card,
   Input,
@@ -92,6 +92,9 @@ function IndexSidepanel() {
   const [executionHistory, setExecutionHistory] = useState<ExecutionRecord[]>([])
   const [showHistory, setShowHistory] = useState(false)
 
+  // 日志容器ref，用于自动滚动
+  const logContainerRef = useRef<HTMLDivElement>(null)
+
   // 计算链接数量
   const linkCount = weiboLinks.trim() 
     ? weiboLinks.split('\n')
@@ -110,7 +113,42 @@ function IndexSidepanel() {
     // 设置定时器定期更新状态
     const statusInterval = setInterval(updateStatus, 2000)
 
-    return () => clearInterval(statusInterval)
+    // 监听来自background的消息
+    const messageListener = (message: any, _sender: any, _sendResponse: any) => {
+      console.log('Sidepanel received message:', message)
+
+      if (message.action === 'addLog') {
+        // 实时添加日志
+        const newLog: LogEntry = {
+          message: message.message,
+          type: message.type || 'info',
+          timestamp: Date.now()
+        }
+        setLogs(prevLogs => {
+          const updatedLogs = [...prevLogs, newLog].slice(-100)
+          // 同时更新storage
+          chrome.storage.local.set({ logs: updatedLogs }).catch(console.error)
+          // 自动滚动到底部
+          setTimeout(() => {
+            if (logContainerRef.current) {
+              logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
+            }
+          }, 100)
+          return updatedLogs
+        })
+      } else if (message.action === 'updateStatus') {
+        // 实时更新状态
+        updateStatus()
+      }
+    }
+
+    // 添加消息监听器
+    chrome.runtime.onMessage.addListener(messageListener)
+
+    return () => {
+      clearInterval(statusInterval)
+      chrome.runtime.onMessage.removeListener(messageListener)
+    }
   }, [])
 
   const loadSettings = async () => {
@@ -720,19 +758,21 @@ function IndexSidepanel() {
             </Button>
           }
         >
-          <div style={{
-            backgroundColor: '#f8f8f8',
-            border: '1px solid #e8e8e8',
-            borderRadius: 8,
-            padding: 16,
-            flex: 1,
-            minHeight: 300,
-            maxHeight: 500,
-            overflowY: 'auto',
-            fontSize: 13,
-            fontFamily: 'monospace',
-            lineHeight: 1.6
-          }}>
+          <div
+            ref={logContainerRef}
+            style={{
+              backgroundColor: '#f8f8f8',
+              border: '1px solid #e8e8e8',
+              borderRadius: 8,
+              padding: 16,
+              flex: 1,
+              minHeight: 400,
+              maxHeight: 800,
+              overflowY: 'auto',
+              fontSize: 13,
+              fontFamily: 'monospace',
+              lineHeight: 1.6
+            }}>
             {logs.length === 0 ? (
               <div style={{
                 textAlign: 'center',
