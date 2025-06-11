@@ -35,13 +35,20 @@
       "tabs",
       "scripting",
       "storage",
-      "activeTab"
+      "activeTab",
+      "sidePanel"
     ],
     "host_permissions": [
       "https://weibo.com/*",
       "https://m.weibo.cn/*",
       "https://www.weibo.com/*",
       "https://api.weibo.com/*"
-    ]
+    ],
+    "side_panel": {
+      "default_path": "sidepanel.html"
+    },
+    "action": {
+      "default_title": "微博控评助手"
+    }
   }
 }

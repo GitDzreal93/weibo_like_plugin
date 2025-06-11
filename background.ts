@@ -35,7 +35,12 @@ interface ExecutionRecord {
 let currentTask: TaskState | null = null
 let taskAbortController: AbortController | null = null
 
-// 监听来自popup的消息
+// 初始化sidepanel
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+})
+
+// 监听来自popup/sidepanel的消息
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   console.log('Background received message:', message)
 

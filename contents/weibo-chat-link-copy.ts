@@ -106,43 +106,6 @@ class WeiboLinkCopyManager {
       this.processExistingMessages()
     }, 1000)
 
-    // 添加调试按钮
-    this.addDebugButton()
-  }
-
-  private addDebugButton() {
-    // 创建一个浮动的调试按钮
-    const debugButton = document.createElement('button')
-    debugButton.textContent = '🔄 重新扫描链接'
-    debugButton.style.cssText = `
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 10000;
-      background: #1890ff;
-      color: white;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    `
-
-    debugButton.addEventListener('click', () => {
-      console.log('Manual rescan triggered')
-      this.processedMessages.clear()
-      this.processExistingMessages()
-
-      // 临时显示反馈
-      const originalText = debugButton.textContent
-      debugButton.textContent = '✅ 已重新扫描'
-      setTimeout(() => {
-        debugButton.textContent = originalText
-      }, 2000)
-    })
-
-    document.body.appendChild(debugButton)
   }
 
   private findChatContainer(): Element | null {
@@ -649,35 +612,7 @@ function showDebugInfo() {
   }, 3000)
 }
 
-// 添加测试按钮（仅在需要时使用）
-function addTestButton(manager: WeiboLinkCopyManager) {
-  // 检查是否已经有测试按钮
-  if (document.querySelector('.weibo-test-button')) {
-    return
-  }
 
-  const testButton = document.createElement('button')
-  testButton.className = 'weibo-test-button'
-  testButton.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: #ff4d4f;
-    color: white;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    z-index: 9999;
-    font-size: 11px;
-  `
-  testButton.textContent = '测试'
-  testButton.onclick = () => {
-    console.log('Manual test triggered')
-    manager.processExistingMessages()
-  }
-  document.body.appendChild(testButton)
-}
 
 // 初始化管理器
 let linkCopyManager: WeiboLinkCopyManager | null = null
@@ -687,15 +622,6 @@ if (window.location.href.includes('api.weibo.com/chat')) {
   console.log('Weibo chat page detected, initializing link copy manager...')
   showDebugInfo()
   linkCopyManager = new WeiboLinkCopyManager()
-
-  // 只在开发模式下添加测试按钮
-  if (process.env.NODE_ENV === 'development') {
-    setTimeout(() => {
-      if (linkCopyManager) {
-        addTestButton(linkCopyManager)
-      }
-    }, 1000)
-  }
 } else {
   console.log('Not a weibo chat page, URL:', window.location.href)
 }
