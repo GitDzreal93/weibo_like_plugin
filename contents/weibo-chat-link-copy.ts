@@ -2,13 +2,17 @@ import type { PlasmoCSConfig } from "plasmo"
 
 export const config: PlasmoCSConfig = {
   matches: [
-    "https://api.weibo.com/chat*"
+    "https://api.weibo.com/chat*",
+    "https://weibo.com/*",
+    "https://www.weibo.com/*",
+    "https://m.weibo.cn/*"
   ],
   run_at: "document_idle"
 }
 
 // 微博聊天页面链接复制功能
-console.log('Weibo chat link copy script loaded on:', window.location.href)
+console.log('🔥 Weibo link copy script loaded on:', window.location.href)
+console.log('🔥 热重载测试 - 当前时间:', new Date().toLocaleTimeString())
 
 // 复制图标 SVG
 const COPY_ICON_SVG = `
@@ -301,20 +305,36 @@ class WeiboLinkCopyManager {
     console.log('Element HTML:', element.outerHTML.substring(0, 200))
     console.log('Element text:', element.textContent?.substring(0, 100))
 
-    // 方法1: 查找 a 标签
-    const linkElements = element.querySelectorAll('a[href]')
-    console.log('Found link elements:', linkElements.length)
+    // 收集所有可能的URL
+    const allUrls: string[] = []
 
-    for (const linkElement of linkElements) {
-      const href = linkElement.getAttribute('href')
-      console.log('Checking href:', href)
+    // 方法1: 检查当前元素是否为 a 标签
+    if (element.tagName === 'A' && element.hasAttribute('href')) {
+      const href = element.getAttribute('href')
+      console.log('Current element is a link:', href)
       if (href && this.isValidUrl(href)) {
-        console.log('Valid URL found in a tag:', href)
-        return href
+        const actualUrl = this.extractActualUrl(href)
+        allUrls.push(actualUrl)
+        console.log('Valid URL found in current element:', actualUrl)
       }
     }
 
-    // 方法2: 查找所有可能包含URL的属性
+    // 方法2: 查找子元素中的 a 标签
+    const linkElements = element.querySelectorAll('a[href]')
+    console.log('Found child link elements:', linkElements.length)
+
+    for (const linkElement of linkElements) {
+      const href = linkElement.getAttribute('href')
+      console.log('Checking child href:', href)
+      if (href && this.isValidUrl(href)) {
+        // 处理微博重定向链接
+        const actualUrl = this.extractActualUrl(href)
+        allUrls.push(actualUrl)
+        console.log('Valid URL found in child a tag:', actualUrl)
+      }
+    }
+
+    // 方法3: 查找所有可能包含URL的属性
     const allElements = element.querySelectorAll('*')
     for (const el of allElements) {
       // 检查常见的URL属性
@@ -322,8 +342,9 @@ class WeiboLinkCopyManager {
       for (const attr of urlAttributes) {
         const value = el.getAttribute(attr)
         if (value && this.isValidUrl(value)) {
-          console.log(`Valid URL found in ${attr} attribute:`, value)
-          return value
+          const actualUrl = this.extractActualUrl(value)
+          allUrls.push(actualUrl)
+          console.log(`Valid URL found in ${attr} attribute:`, actualUrl)
         }
       }
 
@@ -332,26 +353,28 @@ class WeiboLinkCopyManager {
       for (const attr of dataAttributes) {
         const value = el.getAttribute(attr)
         if (value && this.isValidUrl(value)) {
-          console.log(`Valid URL found in ${attr} attribute:`, value)
-          return value
+          const actualUrl = this.extractActualUrl(value)
+          allUrls.push(actualUrl)
+          console.log(`Valid URL found in ${attr} attribute:`, actualUrl)
         }
       }
     }
 
-    // 方法3: 从文本中提取 URL
+    // 方法4: 从文本中提取 URL
     const text = element.textContent || ''
     const urlRegex = /(https?:\/\/[^\s\u4e00-\u9fff]+)/g
     const matches = text.match(urlRegex)
     if (matches && matches.length > 0) {
       for (const match of matches) {
         if (this.isValidUrl(match)) {
-          console.log('Valid URL found in text:', match)
-          return match
+          const actualUrl = this.extractActualUrl(match)
+          allUrls.push(actualUrl)
+          console.log('Valid URL found in text:', actualUrl)
         }
       }
     }
 
-    // 方法4: 查找微博特有的链接格式
+    // 方法5: 查找微博特有的链接格式
     const weiboUrlRegex = /(?:https?:\/\/)?(?:www\.)?weibo\.com\/[^\s\u4e00-\u9fff]*/g
     const weiboMatches = text.match(weiboUrlRegex)
     if (weiboMatches && weiboMatches.length > 0) {
@@ -361,14 +384,115 @@ class WeiboLinkCopyManager {
           url = 'https://' + url
         }
         if (this.isValidUrl(url)) {
-          console.log('Valid Weibo URL found:', url)
-          return url
+          const actualUrl = this.extractActualUrl(url)
+          allUrls.push(actualUrl)
+          console.log('Valid Weibo URL found:', actualUrl)
         }
       }
     }
 
+    // 现在按优先级选择最佳URL
+    const bestUrl = this.selectBestUrl(allUrls)
+    if (bestUrl) {
+      console.log('Selected best URL:', bestUrl)
+      return bestUrl
+    }
+
     console.log('No valid URL found in element')
     return null
+  }
+
+  private selectBestUrl(urls: string[]): string | null {
+    if (urls.length === 0) {
+      return null
+    }
+
+    console.log('Selecting best URL from:', urls)
+
+    // 优先级1: 微博链接
+    const weiboUrls = urls.filter(url =>
+      url.includes('weibo.com') &&
+      !url.includes('sinaimg.cn') &&
+      !url.includes('timeline_card')
+    )
+    if (weiboUrls.length > 0) {
+      console.log('Found weibo URLs:', weiboUrls)
+      return weiboUrls[0]
+    }
+
+    // 优先级2: 其他社交媒体链接
+    const socialUrls = urls.filter(url =>
+      url.includes('twitter.com') ||
+      url.includes('facebook.com') ||
+      url.includes('instagram.com') ||
+      url.includes('douyin.com') ||
+      url.includes('tiktok.com')
+    )
+    if (socialUrls.length > 0) {
+      console.log('Found social media URLs:', socialUrls)
+      return socialUrls[0]
+    }
+
+    // 优先级3: 新闻或内容网站
+    const contentUrls = urls.filter(url =>
+      !url.includes('sinaimg.cn') &&
+      !url.includes('timeline_card') &&
+      !url.includes('.jpg') &&
+      !url.includes('.png') &&
+      !url.includes('.gif') &&
+      !url.includes('.jpeg') &&
+      !url.includes('.webp')
+    )
+    if (contentUrls.length > 0) {
+      console.log('Found content URLs:', contentUrls)
+      return contentUrls[0]
+    }
+
+    // 最后选择: 任何非图片链接
+    const nonImageUrls = urls.filter(url =>
+      !url.includes('.jpg') &&
+      !url.includes('.png') &&
+      !url.includes('.gif') &&
+      !url.includes('.jpeg') &&
+      !url.includes('.webp')
+    )
+    if (nonImageUrls.length > 0) {
+      console.log('Found non-image URLs:', nonImageUrls)
+      return nonImageUrls[0]
+    }
+
+    // 如果只有图片链接，返回第一个
+    console.log('Only image URLs found, returning first:', urls[0])
+    return urls[0]
+  }
+
+  private extractActualUrl(url: string): string {
+    // 处理微博重定向链接
+    if (url.includes('weibo.cn/sinaurl?u=')) {
+      try {
+        const urlObj = new URL(url)
+        const uParam = urlObj.searchParams.get('u')
+        if (uParam) {
+          const decodedUrl = decodeURIComponent(uParam)
+          console.log('Extracted from redirect:', decodedUrl)
+          return decodedUrl
+        }
+      } catch (error) {
+        console.log('Failed to extract from redirect:', error)
+      }
+    }
+
+    // 处理其他重定向格式
+    if (url.includes('sinaurl') && url.includes('http')) {
+      const match = url.match(/https?%3A%2F%2F[^&]+/)
+      if (match) {
+        const decodedUrl = decodeURIComponent(match[0])
+        console.log('Extracted from encoded redirect:', decodedUrl)
+        return decodedUrl
+      }
+    }
+
+    return url
   }
 
   private isValidUrl(url: string): boolean {
@@ -617,13 +741,20 @@ function showDebugInfo() {
 // 初始化管理器
 let linkCopyManager: WeiboLinkCopyManager | null = null
 
+// 检查是否为微博相关页面
+function isWeiboPage(): boolean {
+  const url = window.location.href
+  return url.includes('weibo.com') || url.includes('weibo.cn')
+}
+
 // 页面加载时启动
-if (window.location.href.includes('api.weibo.com/chat')) {
-  console.log('Weibo chat page detected, initializing link copy manager...')
+if (isWeiboPage()) {
+  console.log('Weibo page detected, initializing link copy manager...')
+  console.log('Current URL:', window.location.href)
   showDebugInfo()
   linkCopyManager = new WeiboLinkCopyManager()
 } else {
-  console.log('Not a weibo chat page, URL:', window.location.href)
+  console.log('Not a weibo page, URL:', window.location.href)
 }
 
 // 页面卸载时清理

@@ -199,17 +199,55 @@ async function startTask(taskData: TaskData) {
 
 // 停止任务
 async function stopTask() {
+  console.log('Background: Stopping task...')
+
+  // 立即中止任务控制器
   if (taskAbortController) {
     taskAbortController.abort()
+    console.log('Background: Task aborted')
   }
 
+  // 立即更新任务状态
   if (currentTask) {
+    console.log('Background: Updating task state to stopped')
     currentTask.isRunning = false
+    currentTask.progress = 0
+
+    // 立即保存状态
     await chrome.storage.local.set({ taskState: currentTask })
+    console.log('Background: Task state saved')
+
+    // 立即通知UI更新
     notifyPopup('updateStatus')
+    console.log('Background: UI notified')
+
+    // 向所有微博标签页发送停止消息
+    try {
+      const tabs = await chrome.tabs.query({})
+      const weiboTabs = tabs.filter(tab =>
+        tab.url && (tab.url.includes('weibo.com') || tab.url.includes('m.weibo.cn'))
+      )
+
+      console.log(`Background: Found ${weiboTabs.length} weibo tabs`)
+
+      for (const tab of weiboTabs) {
+        if (tab.id) {
+          try {
+            await chrome.tabs.sendMessage(tab.id, { action: 'stopTask' })
+            console.log('Background: Stop message sent to tab:', tab.id)
+          } catch (error) {
+            // 忽略无法发送消息的标签页（可能没有content script）
+            console.log('Background: Failed to send stop message to tab:', tab.id, error.message)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Background: Error sending stop messages:', error)
+    }
   }
 
   addLog('任务已停止', 'warning')
+  console.log('Background: Stop task completed')
 }
 
 // 智能打开微博标签页

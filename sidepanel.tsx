@@ -25,7 +25,8 @@ import {
   ReloadOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  CopyOutlined
 } from '@ant-design/icons'
 
 import "antd/dist/reset.css"
@@ -74,7 +75,7 @@ function IndexSidepanel() {
   const [settings, setSettings] = useState<Settings>({
     keyword: '陈昊宇',
     maxLikes: 3,
-    interval: 1000,
+    interval: 15000, // 默认15秒，强化安全性
     keepTabs: true
   })
   
@@ -155,7 +156,25 @@ function IndexSidepanel() {
     try {
       const result = await chrome.storage.local.get(['settings'])
       if (result.settings) {
-        setSettings(result.settings)
+        // 合并设置，确保新的默认值生效
+        const loadedSettings = {
+          keyword: '陈昊宇',
+          maxLikes: 3,
+          interval: 15000, // 默认15秒，更安全
+          keepTabs: true,
+          ...result.settings // 用户自定义设置覆盖默认值
+        }
+
+        // 如果加载的间隔小于10秒，重置为15秒（强化安全性）
+        if (loadedSettings.interval < 10000) {
+          loadedSettings.interval = 15000
+          console.log('检测到危险的点赞间隔，已自动调整为15秒')
+        }
+
+        setSettings(loadedSettings)
+
+        // 保存更新后的设置
+        await chrome.storage.local.set({ settings: loadedSettings })
       }
     } catch (error) {
       console.error('Failed to load settings:', error)
@@ -317,12 +336,65 @@ function IndexSidepanel() {
 
   const stopExecution = async () => {
     try {
-      chrome.runtime.sendMessage({ action: 'stopTask' })
-      addLog('用户手动停止任务', 'warning')
-      message.warning('任务已停止')
-      await updateStatus()
+      console.log('UI: Force stopping task...')
+
+      // 立即更新UI状态，避免按钮卡住
+      setTaskState(prev => ({
+        ...prev,
+        isRunning: false,
+        progress: 0,
+        currentLink: '',
+        currentIndex: 0
+      }))
+
+      // 发送停止消息到background
+      console.log('UI: Sending stop message to background...')
+      chrome.runtime.sendMessage({ action: 'stopTask' }, (response) => {
+        console.log('UI: Stop task response:', response)
+        if (chrome.runtime.lastError) {
+          console.error('UI: Stop task error:', chrome.runtime.lastError)
+        }
+      })
+
+      // 强制清除本地存储状态
+      try {
+        await chrome.storage.local.set({
+          taskState: {
+            isRunning: false,
+            currentIndex: 0,
+            totalLinks: 0,
+            currentLink: '',
+            startTime: 0,
+            progress: 0
+          }
+        })
+        console.log('UI: Local storage cleared')
+      } catch (error) {
+        console.error('UI: Failed to clear local storage:', error)
+      }
+
+      addLog('🛑 用户强制停止任务', 'warning')
+      message.warning('任务已强制停止')
+
+      // 延迟更新状态，确保同步
+      setTimeout(async () => {
+        await updateStatus()
+        console.log('UI: Status updated after stop')
+      }, 500)
+
     } catch (error) {
-      message.error('停止任务失败')
+      console.error('UI: Stop execution error:', error)
+      message.error('停止任务失败，但已强制重置状态')
+
+      // 即使失败也要重置UI状态
+      setTaskState({
+        isRunning: false,
+        currentIndex: 0,
+        totalLinks: 0,
+        currentLink: '',
+        startTime: 0,
+        progress: 0
+      })
     }
   }
 
@@ -337,6 +409,39 @@ function IndexSidepanel() {
       await chrome.storage.local.remove(['logs'])
     } catch (error) {
       console.error('Failed to clear logs:', error)
+    }
+  }
+
+  const copyLogs = async () => {
+    if (logs.length === 0) {
+      message.warning('暂无日志可复制')
+      return
+    }
+
+    try {
+      // 格式化日志内容
+      const logText = logs.map(log => {
+        const time = new Date(log.timestamp).toLocaleTimeString()
+        const typePrefix = {
+          'info': '[信息]',
+          'success': '[成功]',
+          'error': '[错误]',
+          'warning': '[警告]'
+        }[log.type] || '[信息]'
+
+        return `[${time}] ${typePrefix} ${log.message}`
+      }).join('\n')
+
+      // 添加头部信息
+      const header = `微博控评助手执行日志\n生成时间: ${new Date().toLocaleString()}\n总计: ${logs.length}条日志\n${'='.repeat(50)}\n\n`
+      const fullText = header + logText
+
+      // 复制到剪贴板
+      await navigator.clipboard.writeText(fullText)
+      message.success(`已复制${logs.length}条日志到剪贴板`)
+    } catch (error) {
+      console.error('Failed to copy logs:', error)
+      message.error('复制日志失败')
     }
   }
 
@@ -487,16 +592,18 @@ function IndexSidepanel() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 14, fontWeight: 500 }}>点赞间隔(毫秒):</Text>
+              <Text style={{ fontSize: 14, fontWeight: 500 }}>点赞间隔(秒):</Text>
               <InputNumber
                 size="middle"
-                min={500}
-                max={5000}
-                step={100}
-                value={settings.interval}
-                onChange={(value) => setSettings({ ...settings, interval: value || 1000 })}
+                min={3}
+                max={60}
+                step={1}
+                value={settings.interval / 1000} // 显示为秒
+                onChange={(value) => setSettings({ ...settings, interval: (value || 15) * 1000 })} // 转换为毫秒，默认15秒
                 onBlur={() => saveSettings(settings)}
                 style={{ width: 140 }}
+                precision={1} // 允许小数点后1位
+                placeholder="推荐15秒"
               />
             </div>
 
@@ -564,11 +671,19 @@ function IndexSidepanel() {
             <Button
               icon={<PauseCircleOutlined />}
               onClick={stopExecution}
-              disabled={!taskState.isRunning}
+              disabled={false}  // 永远可点击，强制停止
               size="large"
-              style={{ flex: 1, height: 44, borderRadius: 6 }}
+              style={{
+                flex: 1,
+                height: 44,
+                borderRadius: 6,
+                backgroundColor: taskState.isRunning ? '#ff4d4f' : '#faad14',
+                borderColor: taskState.isRunning ? '#ff4d4f' : '#faad14',
+                color: '#fff'
+              }}
+              danger={true}
             >
-              停止
+              {taskState.isRunning ? '立即停止' : '强制停止'}
             </Button>
             <Button
               danger
@@ -748,14 +863,25 @@ function IndexSidepanel() {
             }
           }}
           extra={
-            <Button
-              size="small"
-              icon={<DeleteOutlined />}
-              onClick={clearLogs}
-              type="text"
-            >
-              清空
-            </Button>
+            <Space size="small">
+              <Button
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={copyLogs}
+                type="text"
+                disabled={logs.length === 0}
+              >
+                复制
+              </Button>
+              <Button
+                size="small"
+                icon={<DeleteOutlined />}
+                onClick={clearLogs}
+                type="text"
+              >
+                清空
+              </Button>
+            </Space>
           }
         >
           <div

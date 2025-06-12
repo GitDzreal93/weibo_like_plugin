@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>真实案例测试 - 微博聊天链接复制</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .chat-message {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #1890ff;
+        }
+        .emoji {
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        .link {
+            color: #1890ff;
+            text-decoration: none;
+        }
+        .link:hover {
+            text-decoration: underline;
+        }
+        .debug-info {
+            background: #fff2e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #fa8c16;
+        }
+        .test-result {
+            background: #f6ffed;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #52c41a;
+        }
+        .error-result {
+            background: #fff2f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #ff4d4f;
+        }
+        button {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #40a9ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 真实案例测试页面</h1>
+    
+    <div class="debug-info">
+        <h3>📋 测试说明</h3>
+        <p>这个页面模拟你遇到的具体情况：emoji图片链接 + 微博链接</p>
+        <p><strong>你的微博链接</strong>: https://weibo.com/2323589097/5176488632521341?ua=Mozilla%2F5.0%20%28Macintosh%3B%20Intel%20Mac%20OS%20X%2010_15_7%29%20AppleWebKit%2F537.36%20%28KHTML,%20like%20Gecko%29%20Chrome%2F137.0.0.0%20Safari%2F537.36</p>
+        <p><strong>期望结果</strong>: 复制按钮应该复制微博链接，而不是emoji的PNG图片链接</p>
+    </div>
+
+    <div class="chat-message">
+        <h3>模拟聊天消息</h3>
+        <img src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png" alt="emoji" class="emoji">
+        <a href="https://weibo.com/2323589097/5176488632521341?ua=Mozilla%2F5.0%20%28Macintosh%3B%20Intel%20Mac%20OS%20X%2010_15_7%29%20AppleWebKit%2F537.36%20%28KHTML,%20like%20Gecko%29%20Chrome%2F137.0.0.0%20Safari%2F537.36" class="link">网页链接</a>
+        <span>这是一条包含emoji和微博链接的消息</span>
+    </div>
+
+    <div class="debug-info">
+        <h3>🔧 调试工具</h3>
+        <button onclick="runDebugTest()">运行调试测试</button>
+        <button onclick="checkExtensionStatus()">检查插件状态</button>
+        <button onclick="simulateLinkExtraction()">模拟链接提取</button>
+        <button onclick="clearResults()">清除结果</button>
+    </div>
+
+    <div id="test-results"></div>
+
+    <script>
+        // 调试函数
+        function runDebugTest() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<h3>🧪 调试测试结果</h3>';
+            
+            // 检查插件是否加载
+            const copyButtons = document.querySelectorAll('.weibo-chat-copy-btn');
+            addResult(`复制按钮数量: ${copyButtons.length}`, copyButtons.length > 0 ? 'success' : 'error');
+            
+            if (copyButtons.length === 0) {
+                addResult('❌ 没有找到复制按钮，可能原因:', 'error');
+                addResult('1. 插件没有加载或没有启用', 'error');
+                addResult('2. 页面URL不匹配 (需要包含 api.weibo.com/chat)', 'error');
+                addResult(`当前页面URL: ${window.location.href}`, 'info');
+                addResult('3. 页面中没有"网页链接"文本', 'error');
+                
+                // 检查是否有"网页链接"文本
+                const hasLinkText = document.body.textContent.includes('网页链接');
+                addResult(`页面包含"网页链接"文本: ${hasLinkText}`, hasLinkText ? 'success' : 'error');
+                
+                return;
+            }
+            
+            // 分析复制按钮
+            copyButtons.forEach((button, index) => {
+                addResult(`--- 复制按钮 ${index + 1} ---`, 'info');
+                addResult(`按钮title: ${button.title}`, 'info');
+                
+                // 检查链接类型
+                const title = button.title || '';
+                const isWeiboLink = title.includes('weibo.com') && !title.includes('sinaimg.cn');
+                const isImageLink = title.includes('.png') || title.includes('.jpg') || title.includes('sinaimg.cn');
+                
+                if (isWeiboLink) {
+                    addResult('✅ 正确选择了微博链接', 'success');
+                } else if (isImageLink) {
+                    addResult('❌ 错误选择了图片链接', 'error');
+                } else {
+                    addResult('⚠️ 选择了其他类型的链接', 'info');
+                }
+            });
+        }
+        
+        function checkExtensionStatus() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<h3>🔍 插件状态检查</h3>';
+            
+            addResult(`当前页面URL: ${window.location.href}`, 'info');
+            addResult(`URL是否匹配插件规则: ${window.location.href.includes('api.weibo.com/chat')}`, 
+                window.location.href.includes('api.weibo.com/chat') ? 'success' : 'error');
+            
+            // 检查是否有插件相关的元素
+            const hasDebugDiv = document.querySelector('[style*="微博聊天链接复制插件已加载"]');
+            addResult(`插件加载提示: ${hasDebugDiv ? '已显示' : '未显示'}`, hasDebugDiv ? 'success' : 'error');
+            
+            // 检查控制台日志
+            addResult('请查看浏览器控制台(F12)中的日志信息', 'info');
+            addResult('查找包含"Weibo chat page detected"的日志', 'info');
+        }
+        
+        function simulateLinkExtraction() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<h3>🧪 模拟链接提取过程</h3>';
+            
+            const messageElement = document.querySelector('.chat-message');
+            if (!messageElement) {
+                addResult('❌ 没有找到消息元素', 'error');
+                return;
+            }
+            
+            // 收集所有链接
+            const allUrls = [];
+            
+            // 方法1: a标签
+            const linkElements = messageElement.querySelectorAll('a[href]');
+            addResult(`找到 ${linkElements.length} 个 a 标签`, 'info');
+            
+            linkElements.forEach((link, index) => {
+                const href = link.getAttribute('href');
+                allUrls.push(href);
+                addResult(`  链接 ${index + 1}: ${href}`, 'info');
+            });
+            
+            // 方法2: img标签
+            const imgElements = messageElement.querySelectorAll('img[src]');
+            addResult(`找到 ${imgElements.length} 个 img 标签`, 'info');
+            
+            imgElements.forEach((img, index) => {
+                const src = img.getAttribute('src');
+                allUrls.push(src);
+                addResult(`  图片 ${index + 1}: ${src}`, 'info');
+            });
+            
+            addResult(`总共收集到 ${allUrls.length} 个URL`, 'info');
+            
+            // 应用优先级选择
+            const bestUrl = selectBestUrl(allUrls);
+            addResult(`选择的最佳URL: ${bestUrl}`, 'info');
+            
+            // 验证结果
+            const isCorrect = bestUrl && bestUrl.includes('weibo.com') && !bestUrl.includes('sinaimg.cn');
+            addResult(`选择结果: ${isCorrect ? '✅ 正确' : '❌ 错误'}`, isCorrect ? 'success' : 'error');
+        }
+        
+        function selectBestUrl(urls) {
+            if (urls.length === 0) return null;
+            
+            // 优先级1: 微博链接
+            const weiboUrls = urls.filter(url => 
+                url && url.includes('weibo.com') && 
+                !url.includes('sinaimg.cn') && 
+                !url.includes('timeline_card')
+            );
+            if (weiboUrls.length > 0) {
+                addResult('✅ 找到微博链接，优先选择', 'success');
+                return weiboUrls[0];
+            }
+            
+            // 优先级2: 非图片链接
+            const nonImageUrls = urls.filter(url => 
+                url && !url.includes('.jpg') &&
+                !url.includes('.png') &&
+                !url.includes('.gif') &&
+                !url.includes('.jpeg') &&
+                !url.includes('.webp')
+            );
+            if (nonImageUrls.length > 0) {
+                addResult('⚠️ 没有微博链接，选择非图片链接', 'info');
+                return nonImageUrls[0];
+            }
+            
+            // 最后选择: 图片链接
+            addResult('❌ 只找到图片链接', 'error');
+            return urls[0];
+        }
+        
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('test-results');
+            const div = document.createElement('div');
+            div.className = type === 'success' ? 'test-result' : 
+                           type === 'error' ? 'error-result' : 'debug-info';
+            div.innerHTML = `<p>${message}</p>`;
+            results.appendChild(div);
+        }
+        
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '';
+        }
+        
+        // 页面加载时自动检查
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('🔗 真实案例测试页面已加载');
+                console.log('当前URL:', window.location.href);
+                console.log('是否匹配插件规则:', window.location.href.includes('api.weibo.com/chat'));
+                
+                if (!window.location.href.includes('api.weibo.com/chat')) {
+                    console.warn('⚠️ 当前页面URL不匹配插件规则，插件可能不会工作');
+                    console.warn('插件只在包含 "api.weibo.com/chat" 的页面上工作');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -13,6 +13,7 @@ export const config: PlasmoCSConfig = {
 console.log('Weibo automation content script loaded on:', window.location.href)
 
 let isTaskRunning = false
+let isTaskStopped = false // 任务是否被手动停止
 let likedCommentsMap = new Map<string, boolean>() // 记录已点赞的评论
 let taskStartTime = 0 // 任务开始时间
 const MAX_TASK_DURATION = 5 * 60 * 1000 // 5分钟最大执行时间
@@ -37,23 +38,62 @@ class ModernElementFinder {
     
     // 点赞按钮选择器（基于 Playwright 测试验证）
     likeButton: [
+      // 标准点赞按钮
       '[data-testid="like-button"]',
       '[aria-label*="点赞"]',
       '[aria-label*="赞"]',
       '[title*="点赞"]',
       '[title*="赞"]',
+
+      // 微博经典选择器
       '.WB_func .ficon_praise',
       '.WB_func [action-type="feed_list_like"]',
       '.toolbar_item .like',
       '.icon-praise',
       '.icon-like',
+
+      // 通用点赞选择器
       '[class*="like"]:not([class*="unlike"])',
       '[class*="Like"]:not([class*="Unlike"])',
       '[class*="praise"]',
       '[class*="Praise"]',
       '[class*="zan"]',
       '[class*="thumb"]',
-      '[class*="heart"]'
+      '[class*="heart"]',
+
+      // 新版微博可能的选择器
+      'button[title*="赞"]',
+      'a[title*="赞"]',
+      '.WB_func a',
+      '.toolbar a',
+      '.comment_func a',
+      '[action-type*="like"]',
+      '[action-type*="praise"]',
+
+      // 更通用的按钮选择器
+      'svg[class*="like"]',
+      'svg[class*="praise"]',
+      '.woo-box-flex button',
+      '.woo-box-item button',
+      '[role="button"][aria-label*="赞"]',
+      '.toolbar button',
+      '.func button',
+      '[class*="func"] button',
+      '[class*="action"] button',
+
+      // 图标选择器
+      'i[class*="like"]',
+      'i[class*="praise"]',
+      'i[class*="zan"]',
+      '.wbicon',
+      '.icon',
+
+      // 更宽泛的选择器（最后尝试）
+      'button:has(svg)',
+      'a:has(svg)',
+      'button',
+      'a[href*="attitude"]',
+      '[class*="attitude"]'
     ],
     
     // 评论容器选择器
@@ -239,25 +279,84 @@ class ModernElementFinder {
   async findLikeButton(commentElement: Element): Promise<Element | null> {
     // 从评论元素向上查找包含点赞按钮的容器
     let container = commentElement
+    const debugInfo: string[] = []
 
     for (let level = 0; level < 8; level++) {
       if (!container || !container.parentElement) break
       container = container.parentElement
 
+      debugInfo.push(`Level ${level}: ${container.tagName}.${container.className}`)
+
       // 在当前容器中查找点赞按钮
       for (const selector of this.selectors.likeButton) {
-        const button = container.querySelector(selector)
-        if (button && this.isClickableElement(button)) {
-          // 检查是否是头条微博的点赞按钮，如果是则跳过
-          if (this.isMainWeiboLikeButton(button)) {
-            console.log('跳过头条微博点赞按钮')
-            continue
+        const buttons = container.querySelectorAll(selector)
+
+        for (const button of buttons) {
+          debugInfo.push(`  Found button with selector "${selector}": ${button.tagName}.${button.className}`)
+
+          if (this.isClickableElement(button)) {
+            debugInfo.push(`    Button is clickable`)
+
+            // 检查是否是头条微博的点赞按钮，如果是则跳过
+            if (this.isMainWeiboLikeButton(button)) {
+              debugInfo.push(`    Skipped: Main weibo button`)
+              console.log('跳过头条微博点赞按钮')
+              continue
+            }
+
+            debugInfo.push(`    Found valid like button!`)
+            console.log('点赞按钮查找调试信息:', debugInfo.join('\n'))
+            return button
+          } else {
+            debugInfo.push(`    Button not clickable`)
           }
-          return button
         }
       }
     }
 
+    // 如果没找到，输出调试信息
+    console.log('未找到点赞按钮，调试信息:', debugInfo.join('\n'))
+
+    // 尝试更宽泛的搜索
+    return this.findLikeButtonFallback(commentElement)
+  }
+
+  /**
+   * 备用点赞按钮查找方法
+   */
+  private findLikeButtonFallback(commentElement: Element): Element | null {
+    console.log('使用备用方法查找点赞按钮...')
+
+    // 查找所有可能的按钮和链接
+    let container = commentElement
+    for (let level = 0; level < 10; level++) {
+      if (!container || !container.parentElement) break
+      container = container.parentElement
+
+      // 查找所有按钮和链接
+      const allButtons = container.querySelectorAll('button, a, [role="button"], [onclick], [class*="btn"], [class*="button"]')
+
+      for (const button of allButtons) {
+        const text = button.textContent?.toLowerCase() || ''
+        const title = button.getAttribute('title')?.toLowerCase() || ''
+        const ariaLabel = button.getAttribute('aria-label')?.toLowerCase() || ''
+        const className = button.className.toLowerCase()
+
+        // 检查是否包含点赞相关的文本或类名
+        if (text.includes('赞') || text.includes('like') ||
+            title.includes('赞') || title.includes('like') ||
+            ariaLabel.includes('赞') || ariaLabel.includes('like') ||
+            className.includes('like') || className.includes('praise') || className.includes('zan')) {
+
+          if (this.isClickableElement(button) && !this.isMainWeiboLikeButton(button)) {
+            console.log(`备用方法找到点赞按钮: ${button.tagName}.${button.className}, text: "${text}"`)
+            return button
+          }
+        }
+      }
+    }
+
+    console.log('备用方法也未找到点赞按钮')
     return null
   }
 
@@ -403,39 +502,158 @@ class ModernElementFinder {
   }
 
   /**
-   * 安全点击元素
+   * 检测是否出现验证码或反机器人弹窗
    */
-  async safeClick(element: Element, options: { scrollIntoView?: boolean; delay?: number } = {}): Promise<boolean> {
-    const { scrollIntoView = true, delay = 500 } = options
-    
+  detectCaptchaOrVerification(): boolean {
+    const captchaSelectors = [
+      '[class*="captcha"]',
+      '[class*="verification"]',
+      '[class*="verify"]',
+      '[id*="captcha"]',
+      '[id*="verification"]',
+      'iframe[src*="captcha"]',
+      '.nc_wrapper', // 阿里云验证码
+      '.geetest_', // 极验证码
+      '[class*="slider"]', // 滑块验证
+      'canvas', // 图片验证码
+      '[class*="challenge"]',
+      '[class*="robot"]',
+      '[class*="human"]',
+      '[class*="security"]', // 安全验证
+      '[class*="anti"]', // 反机器人
+      '.layui-layer', // 弹窗层
+      '.modal', // 模态框
+      '[role="dialog"]', // 对话框
+      '.popup', // 弹窗
+      '.overlay' // 遮罩层
+    ]
+
+    for (const selector of captchaSelectors) {
+      const element = document.querySelector(selector)
+      if (element && this.isElementVisible(element)) {
+        console.log('检测到验证码或反机器人弹窗:', selector, element)
+        return true
+      }
+    }
+
+    // 检查是否有包含验证相关文本的元素
+    const verificationTexts = [
+      'Select in this order',
+      '请按顺序点击',
+      '验证码',
+      '人机验证',
+      '安全验证',
+      '滑动验证',
+      '点击验证',
+      '拖拽验证',
+      '请完成验证',
+      '安全检查',
+      '反机器人验证',
+      'Please verify',
+      'Security check',
+      'Anti-robot'
+    ]
+
+    // 优化文本检测，只检查可见的文本元素
+    for (const text of verificationTexts) {
+      const xpath = `//*[contains(text(), '${text}')]`
+      const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null)
+      const element = result.singleNodeValue as Element
+
+      if (element && this.isElementVisible(element)) {
+        console.log('检测到验证文本:', text, element)
+        return true
+      }
+    }
+
+    return false
+  }
+
+  /**
+   * 安全点击元素 - 增强版，包含反检测机制
+   */
+  async safeClick(element: Element, options: { scrollIntoView?: boolean; delay?: number; maxRetries?: number } = {}): Promise<boolean> {
+    const { scrollIntoView = true, delay = 500, maxRetries = 3 } = options
+
     if (!element || !this.isClickableElement(element)) {
       throw new Error('元素不可点击')
     }
-    
+
+    // 检查是否有验证码
+    if (this.detectCaptchaOrVerification()) {
+      throw new Error('检测到验证码，停止自动化操作')
+    }
+
     if (scrollIntoView) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // 使用自然滚动，避免跳到页面顶部
+      element.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
       await this.sleep(delay)
     }
-    
-    // 模拟真实用户点击
+
+    // 添加随机延迟模拟人类行为
+    const randomDelay = Math.random() * 500 + 200 // 200-700ms随机延迟
+    await this.sleep(randomDelay)
+
+    // 模拟真实用户点击 - 添加轻微的随机偏移
     const rect = element.getBoundingClientRect()
-    const x = rect.left + rect.width / 2
-    const y = rect.top + rect.height / 2
-    
-    // 触发鼠标事件序列
-    const events = ['mousedown', 'mouseup', 'click']
-    for (const eventType of events) {
-      const event = new MouseEvent(eventType, {
-        bubbles: true,
-        cancelable: true,
-        clientX: x,
-        clientY: y
-      })
-      element.dispatchEvent(event)
-      await this.sleep(50)
+    const offsetX = (Math.random() - 0.5) * 10 // ±5px随机偏移
+    const offsetY = (Math.random() - 0.5) * 10
+    const x = rect.left + rect.width / 2 + offsetX
+    const y = rect.top + rect.height / 2 + offsetY
+
+    let success = false
+    let lastError = null
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // 再次检查验证码
+        if (this.detectCaptchaOrVerification()) {
+          throw new Error('检测到验证码，停止自动化操作')
+        }
+
+        // 触发鼠标事件序列 - 模拟更真实的用户行为
+        const events = [
+          { type: 'mouseover', delay: 50 },
+          { type: 'mouseenter', delay: 30 },
+          { type: 'mousedown', delay: 80 },
+          { type: 'mouseup', delay: 60 },
+          { type: 'click', delay: 40 }
+        ]
+
+        for (const { type, delay: eventDelay } of events) {
+          const event = new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            button: 0
+          })
+          element.dispatchEvent(event)
+          await this.sleep(eventDelay + Math.random() * 20) // 添加随机延迟
+        }
+
+        success = true
+        break
+
+      } catch (error) {
+        lastError = error
+        console.log(`点击尝试 ${attempt + 1} 失败:`, error.message)
+
+        if (error.message.includes('验证码')) {
+          throw error // 如果是验证码错误，直接抛出
+        }
+
+        if (attempt < maxRetries - 1) {
+          await this.sleep(1000 + Math.random() * 1000) // 失败后等待1-2秒
+        }
+      }
     }
-    
-    return true
+
+    if (!success && lastError) {
+      throw lastError
+    }
+
+    return success
   }
 
   /**
@@ -457,12 +675,40 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.action === 'executeTask') {
       if (!isTaskRunning) {
         console.log('Starting task execution...')
+        isTaskStopped = false // 重置停止标志
         executeTask(message.settings).catch(error => {
           console.error('Task execution failed:', error)
           sendProgress(`任务执行失败: ${error.message}`, 'error')
+        }).finally(() => {
+          isTaskRunning = false
+          isTaskStopped = false
         })
       } else {
         console.log('Task already running, ignoring...')
+      }
+    } else if (message.action === 'stopTask') {
+      console.log('Content script: Received stop task message')
+
+      // 立即设置停止标志
+      isTaskStopped = true
+      isTaskRunning = false
+
+      sendProgress('🛑 收到停止指令，正在停止任务...', 'warning')
+      console.log('Content script: Task stop requested, isTaskStopped set to:', isTaskStopped)
+      console.log('Content script: Task running set to:', isTaskRunning)
+
+      // 立即发送停止确认
+      sendProgress('🛑 任务已立即停止', 'warning')
+
+      // 通知background任务已停止
+      try {
+        chrome.runtime.sendMessage({
+          action: 'taskComplete'
+        }).catch(error => {
+          console.error('Failed to send task complete message:', error)
+        })
+      } catch (error) {
+        console.error('Failed to send task complete message:', error)
       }
     }
 
@@ -489,6 +735,11 @@ function isTaskTimeout(): boolean {
   return taskStartTime > 0 && (Date.now() - taskStartTime) > MAX_TASK_DURATION
 }
 
+// 检查任务是否应该停止（超时或手动停止）
+function shouldStopTask(): boolean {
+  return isTaskStopped || isTaskTimeout()
+}
+
 // 格式化剩余时间
 function formatRemainingTime(): string {
   if (taskStartTime === 0) return '未知'
@@ -499,17 +750,80 @@ function formatRemainingTime(): string {
   return `${minutes}分${seconds}秒`
 }
 
+// 反检测：隐藏自动化痕迹
+function hideAutomationTraces() {
+  try {
+    // 隐藏webdriver标识
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => undefined,
+      configurable: true
+    })
+
+    // 模拟真实浏览器环境
+    Object.defineProperty(window, 'chrome', {
+      get: () => ({
+        runtime: undefined,
+        app: undefined
+      }),
+      configurable: true
+    })
+
+    // 添加随机鼠标移动
+    const addRandomMouseMovement = () => {
+      const event = new MouseEvent('mousemove', {
+        clientX: Math.random() * window.innerWidth,
+        clientY: Math.random() * window.innerHeight,
+        bubbles: true
+      })
+      document.dispatchEvent(event)
+    }
+
+    // 定期添加随机鼠标移动
+    setInterval(addRandomMouseMovement, 3000 + Math.random() * 5000)
+
+    console.log('反检测措施已启用')
+  } catch (error) {
+    console.log('反检测措施启用失败:', error)
+  }
+}
+
 // 执行主要任务 - 使用现代化元素查找器
 async function executeTask(settings: any) {
   isTaskRunning = true
   taskStartTime = Date.now()
   likedCommentsMap.clear() // 清空之前的记录
 
+  // 启用反检测措施
+  hideAutomationTraces()
+
   sendProgress('🚀 任务开始执行', 'info')
   sendProgress(`⏰ 最大执行时间: 5分钟`, 'info')
   sendProgress(`🎯 目标关键词: "${settings.keyword}"`, 'info')
   sendProgress(`👍 最大点赞数: ${settings.maxLikes}`, 'info')
-  sendProgress(`⏱️ 点赞间隔: ${settings.interval}ms`, 'info')
+  sendProgress(`⏱️ 点赞间隔: ${settings.interval / 1000}秒`, 'info')
+
+  // 等待页面稳定，避免立即触发验证码
+  sendProgress('⏳ 等待页面稳定中...', 'info')
+  await modernFinder.sleep(8000) // 等待8秒让页面完全加载
+
+  // 检查是否已经有验证码 - 增强调试
+  sendProgress('🔍 开始检测页面是否存在验证码...', 'info')
+  const captchaDetected = modernFinder.detectCaptchaOrVerification()
+
+  if (captchaDetected) {
+    sendProgress('🚨 页面已存在验证码，请先手动完成验证', 'error')
+    sendProgress('💡 完成验证后请等待5-10分钟再重新启动任务', 'warning')
+
+    // 调试验证码检测
+    await debugCaptchaDetection()
+    return
+  } else {
+    sendProgress('✅ 未检测到验证码，继续执行任务', 'success')
+  }
+
+  // 模拟真实用户浏览行为
+  sendProgress('👀 模拟用户浏览行为...', 'info')
+  await simulateUserBrowsing()
 
   try {
     sendProgress('开始分析页面...', 'info')
@@ -579,6 +893,7 @@ async function executeTask(settings: any) {
     })
   } finally {
     isTaskRunning = false
+    isTaskStopped = false // 重置停止标志
   }
 }
 
@@ -610,6 +925,111 @@ function sendProgress(message: string, type: string = 'info') {
     }
   } catch (error) {
     console.error('Failed to send progress message:', error)
+  }
+}
+
+// 调试验证码检测
+async function debugCaptchaDetection() {
+  sendProgress('🔍 开始调试验证码检测...', 'info')
+
+  // 检查所有可能的验证码选择器
+  const captchaSelectors = [
+    '[class*="captcha"]',
+    '[class*="verification"]',
+    '[class*="verify"]',
+    '[id*="captcha"]',
+    '[id*="verification"]',
+    'iframe[src*="captcha"]',
+    '.nc_wrapper',
+    '.geetest_',
+    '[class*="slider"]',
+    'canvas',
+    '[class*="challenge"]',
+    '[class*="robot"]',
+    '[class*="human"]',
+    '[class*="security"]',
+    '[class*="anti"]',
+    '.layui-layer',
+    '.modal',
+    '[role="dialog"]',
+    '.popup',
+    '.overlay'
+  ]
+
+  for (const selector of captchaSelectors) {
+    const elements = document.querySelectorAll(selector)
+    if (elements.length > 0) {
+      sendProgress(`🔍 找到验证码选择器 ${selector}: ${elements.length}个元素`, 'warning')
+      for (let i = 0; i < Math.min(elements.length, 3); i++) {
+        const element = elements[i]
+        const isVisible = modernFinder.isElementVisible(element)
+        const text = element.textContent?.substring(0, 100) || '无文本'
+        sendProgress(`  元素${i+1}: 可见=${isVisible}, 文本="${text}"`, 'info')
+      }
+    }
+  }
+
+  // 检查验证文本
+  const verificationTexts = [
+    'Select in this order',
+    '请按顺序点击',
+    '验证码',
+    '人机验证',
+    '安全验证',
+    '滑动验证',
+    '点击验证',
+    '拖拽验证',
+    '请完成验证',
+    '安全检查',
+    '反机器人验证',
+    'Please verify',
+    'Security check',
+    'Anti-robot'
+  ]
+
+  for (const text of verificationTexts) {
+    // 使用简单的文本搜索
+    const allElements = document.querySelectorAll('*')
+    let found = false
+    for (const element of allElements) {
+      if (element.textContent && element.textContent.includes(text)) {
+        const isVisible = modernFinder.isElementVisible(element)
+        if (isVisible) {
+          sendProgress(`🔍 找到验证文本 "${text}": 元素=${element.tagName}, 可见=${isVisible}`, 'warning')
+          sendProgress(`  完整文本: "${element.textContent.substring(0, 200)}"`, 'info')
+          found = true
+          break
+        }
+      }
+    }
+    if (!found) {
+      // 使用XPath搜索
+      const xpath = `//*[contains(text(), '${text}')]`
+      const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null)
+      const element = result.singleNodeValue as Element
+      if (element) {
+        const isVisible = modernFinder.isElementVisible(element)
+        sendProgress(`🔍 XPath找到验证文本 "${text}": 可见=${isVisible}`, isVisible ? 'warning' : 'info')
+      }
+    }
+  }
+
+  // 检查页面中所有可见的文本内容
+  sendProgress('🔍 检查页面中所有可见文本...', 'info')
+  const visibleTexts: string[] = []
+  const allElements = document.querySelectorAll('*')
+  for (const element of allElements) {
+    if (modernFinder.isElementVisible(element) && element.textContent) {
+      const text = element.textContent.trim()
+      if (text.length > 5 && text.length < 100) {
+        visibleTexts.push(text)
+      }
+    }
+  }
+
+  // 显示前10个可见文本
+  for (let i = 0; i < Math.min(visibleTexts.length, 10); i++) {
+    sendProgress(`  可见文本${i+1}: "${visibleTexts[i]}"`, 'info')
   }
 }
 
@@ -666,7 +1086,7 @@ async function performIntelligentLiking(targetComments: any[], settings: any): P
   sendProgress(`🎯 开始智能点赞流程，目标点赞数: ${maxLikes}`, 'info')
   sendProgress(`⏰ 剩余时间: ${formatRemainingTime()}`, 'info')
 
-  while (likedCount < maxLikes && !isTaskTimeout()) {
+  while (likedCount < maxLikes && !shouldStopTask()) {
     // 检查是否需要滚动寻找更多评论
     if (attemptCount >= targetComments.length && scrollAttempts < maxScrollAttempts) {
       sendProgress(`📜 当前评论已处理完，尝试滚动寻找更多评论 (${scrollAttempts + 1}/${maxScrollAttempts})`, 'info')
@@ -760,18 +1180,58 @@ async function performIntelligentLiking(targetComments: any[], settings: any): P
       continue
     }
 
-    // 检查超时
-    if (isTaskTimeout()) {
-      sendProgress(`⏰ 任务执行超时 (5分钟)，停止点赞`, 'warning')
+    // 检查是否需要停止任务
+    if (shouldStopTask()) {
+      if (isTaskStopped) {
+        sendProgress(`🛑 任务已被手动停止`, 'warning')
+      } else {
+        sendProgress(`⏰ 任务执行超时 (5分钟)，停止点赞`, 'warning')
+      }
+      break
+    }
+
+    // 额外检查：如果任务被标记为停止，立即退出
+    if (isTaskStopped) {
+      sendProgress(`🛑 检测到停止信号，立即退出`, 'warning')
       break
     }
 
     try {
       sendProgress(`👍 准备点赞第${likedCount + 1}条评论: ${comment.text.substring(0, 30)}...`, 'info')
 
-      // 滚动到评论位置
-      comment.element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      await modernFinder.sleep(500)
+      // 多重检查：停止状态和验证码
+      if (isTaskStopped) {
+        sendProgress(`🛑 任务已停止，退出点赞流程`, 'warning')
+        break
+      }
+
+      if (modernFinder.detectCaptchaOrVerification()) {
+        sendProgress(`🚨 检测到验证码或反机器人验证，停止自动化操作`, 'error')
+        sendProgress(`💡 请手动完成验证后等待5-10分钟再重新启动任务`, 'warning')
+        isTaskStopped = true // 设置停止标志
+        break
+      }
+
+      // 自然滚动到评论位置（避免跳到顶部）
+      await naturalScrollToElement(comment.element)
+      await modernFinder.sleep(1500 + Math.random() * 1000) // 1.5-2.5秒随机延迟
+
+      // 滚动后再次检查
+      if (isTaskStopped || modernFinder.detectCaptchaOrVerification()) {
+        sendProgress(`🛑 滚动后检测到停止信号或验证码，退出`, 'warning')
+        break
+      }
+
+      // 点赞前的额外思考时间，模拟用户阅读
+      sendProgress(`📖 模拟阅读评论内容...`, 'info')
+      const readingTime = 3000 + Math.random() * 5000 // 3-8秒阅读时间
+      await modernFinder.sleep(readingTime)
+
+      // 随机的犹豫行为，模拟用户思考
+      if (Math.random() < 0.3) { // 30%概率
+        sendProgress(`🤔 模拟用户犹豫...`, 'info')
+        await modernFinder.sleep(1000 + Math.random() * 2000) // 1-3秒犹豫
+      }
 
       // 再次检查点赞状态（可能在滚动过程中状态发生变化）
       const currentLikeStatus = modernFinder.checkIfLiked(comment.likeButton)
@@ -781,14 +1241,80 @@ async function performIntelligentLiking(targetComments: any[], settings: any): P
         continue
       }
 
-      // 执行点赞
-      await modernFinder.safeClick(comment.likeButton, {
-        scrollIntoView: false, // 已经滚动过了
-        delay: 300
-      })
+      // 详细调试点赞按钮
+      sendProgress(`🔍 调试点赞按钮: ${comment.likeButton.tagName}.${comment.likeButton.className}`, 'info')
+      const rect = comment.likeButton.getBoundingClientRect()
+      sendProgress(`🔍 按钮位置: top=${Math.round(rect.top)}px, left=${Math.round(rect.left)}px`, 'info')
+      sendProgress(`🔍 按钮可见: ${modernFinder.isElementVisible(comment.likeButton)}`, 'info')
+      sendProgress(`🔍 按钮可点击: ${modernFinder.isClickableElement(comment.likeButton)}`, 'info')
 
-      // 等待点赞生效
-      await modernFinder.sleep(1000)
+      // 执行点赞 - 使用更自然的点击策略
+      try {
+        // 模拟真实用户的鼠标移动到按钮
+        const rect = comment.likeButton.getBoundingClientRect()
+        const centerX = rect.left + rect.width / 2
+        const centerY = rect.top + rect.height / 2
+
+        // 添加随机偏移，模拟人类不精确的点击
+        const offsetX = (Math.random() - 0.5) * rect.width * 0.3
+        const offsetY = (Math.random() - 0.5) * rect.height * 0.3
+
+        // 创建更自然的鼠标事件序列
+        const mouseEvents = [
+          new MouseEvent('mouseenter', { clientX: centerX + offsetX, clientY: centerY + offsetY, bubbles: true }),
+          new MouseEvent('mouseover', { clientX: centerX + offsetX, clientY: centerY + offsetY, bubbles: true }),
+          new MouseEvent('mousedown', { clientX: centerX + offsetX, clientY: centerY + offsetY, bubbles: true }),
+          new MouseEvent('mouseup', { clientX: centerX + offsetX, clientY: centerY + offsetY, bubbles: true }),
+          new MouseEvent('click', { clientX: centerX + offsetX, clientY: centerY + offsetY, bubbles: true })
+        ]
+
+        // 逐个触发事件，模拟真实点击
+        for (const event of mouseEvents) {
+          comment.likeButton.dispatchEvent(event)
+          await modernFinder.sleep(50 + Math.random() * 100) // 50-150ms间隔
+        }
+
+        sendProgress(`✅ 点赞操作已执行（模拟真实点击）`, 'info')
+
+        // 点赞后检查结果
+        await modernFinder.sleep(2000) // 等待2秒让页面响应
+
+        // 检查验证码
+        if (modernFinder.detectCaptchaOrVerification()) {
+          sendProgress(`🚨 点赞后检测到验证码，立即停止`, 'error')
+          isTaskStopped = true
+          break
+        }
+
+        // 检查点赞是否被撤销
+        const isLikeSuccessful = await checkLikeStatus(comment.likeButton)
+        if (!isLikeSuccessful) {
+          sendProgress(`⚠️ 检测到点赞被微博撤销，触发反自动化机制`, 'warning')
+          sendProgress(`💡 建议：立即停止任务，增加间隔到25-30秒后重试`, 'warning')
+
+          // 记录撤销次数
+          let cancelCount = parseInt(localStorage.getItem('likeCancelCount') || '0')
+          cancelCount++
+          localStorage.setItem('likeCancelCount', cancelCount.toString())
+
+          if (cancelCount >= 2) {
+            sendProgress(`🚨 连续${cancelCount}次点赞被撤销，建议停止使用24小时`, 'error')
+            isTaskStopped = true
+            break
+          }
+        } else {
+          sendProgress(`✅ 点赞成功确认`, 'success')
+          // 成功时重置撤销计数
+          localStorage.setItem('likeCancelCount', '0')
+        }
+
+      } catch (error) {
+        sendProgress(`❌ 点赞操作失败: ${error.message}`, 'error')
+        throw error
+      }
+
+      // 等待点赞生效 - 增加等待时间
+      await modernFinder.sleep(1500 + Math.random() * 500) // 1.5-2秒随机延迟
 
       // 检查点赞是否成功
       const isNowLiked = modernFinder.checkIfLiked(comment.likeButton)
@@ -798,8 +1324,19 @@ async function performIntelligentLiking(targetComments: any[], settings: any): P
         likedCommentsMap.set(commentId, true)
         sendProgress(`✅ 成功点赞第${likedCount}条评论: ${comment.text.substring(0, 30)}...`, 'success')
         sendProgress(`📊 进度: ${likedCount}/${maxLikes} | 剩余时间: ${formatRemainingTime()}`, 'info')
+
+        // 成功点赞后增加额外延迟，模拟用户阅读行为
+        await modernFinder.sleep(2000 + Math.random() * 1000) // 2-3秒随机延迟
       } else {
         sendProgress(`❌ 点赞失败或被取消: ${comment.text.substring(0, 30)}...`, 'warning')
+
+        // 失败后检查是否出现验证码
+        if (modernFinder.detectCaptchaOrVerification()) {
+          sendProgress(`🚨 点赞失败可能由于验证码，停止自动化操作`, 'error')
+          sendProgress(`💡 请手动完成验证后等待5-10分钟再重新启动任务`, 'warning')
+          isTaskStopped = true // 设置停止标志
+          break
+        }
       }
 
       // 记录已处理（无论成功失败）
@@ -807,13 +1344,36 @@ async function performIntelligentLiking(targetComments: any[], settings: any): P
 
     } catch (error) {
       sendProgress(`❌ 点赞过程出错: ${error.message}`, 'error')
+
+      // 如果是验证码错误，停止整个任务
+      if (error.message.includes('验证码')) {
+        sendProgress(`🚨 检测到验证码，任务已停止`, 'error')
+        sendProgress(`💡 请手动完成验证后重新启动任务`, 'warning')
+        break
+      }
+
       likedCommentsMap.set(commentId, true) // 标记为已处理避免重复
+
+      // 出错后增加延迟
+      await modernFinder.sleep(3000 + Math.random() * 2000) // 3-5秒随机延迟
     }
 
-    // 添加延迟避免被检测
-    if (likedCount < maxLikes && !isTaskTimeout()) {
-      sendProgress(`⏳ 等待${settings.interval}ms后继续...`, 'info')
-      await modernFinder.sleep(settings.interval)
+    // 添加延迟避免被检测 - 强化随机性
+    if (likedCount < maxLikes && !shouldStopTask()) {
+      const baseInterval = settings.interval
+      // 增加更大的随机性：基础时间 + 50%-100%的随机延迟
+      const randomMultiplier = 0.5 + Math.random() * 0.5 // 0.5-1.0倍
+      const randomInterval = baseInterval + baseInterval * randomMultiplier
+
+      // 额外的随机暂停（模拟用户分心）
+      if (Math.random() < 0.2) { // 20%概率
+        const extraPause = 5000 + Math.random() * 10000 // 5-15秒额外暂停
+        sendProgress(`😴 模拟用户分心，额外暂停${(extraPause / 1000).toFixed(1)}秒...`, 'info')
+        await modernFinder.sleep(extraPause)
+      }
+
+      sendProgress(`⏳ 等待${(randomInterval / 1000).toFixed(1)}秒后继续...`, 'info')
+      await modernFinder.sleep(randomInterval)
     }
   }
 
@@ -908,6 +1468,118 @@ async function performIntelligentScroll(keyword: string): Promise<any[]> {
 
   sendProgress(`智能滚动完成，共滚动${scrollCount}次，找到${allComments.length}条评论`, 'info')
   return allComments
+}
+
+// 自然滚动到元素（避免跳到页面顶部）
+async function naturalScrollToElement(element: Element) {
+  try {
+    const rect = element.getBoundingClientRect()
+    const windowHeight = window.innerHeight
+    const currentScroll = window.scrollY
+
+    // 如果元素已经在视窗内，不需要滚动
+    if (rect.top >= 0 && rect.bottom <= windowHeight) {
+      console.log('元素已在视窗内，无需滚动')
+      return
+    }
+
+    // 计算需要滚动的距离
+    let targetScroll = currentScroll
+
+    if (rect.top < 0) {
+      // 元素在视窗上方，向上滚动一点点
+      targetScroll = currentScroll + rect.top - 100 // 留100px边距
+    } else if (rect.bottom > windowHeight) {
+      // 元素在视窗下方，向下滚动一点点
+      targetScroll = currentScroll + (rect.bottom - windowHeight) + 100 // 留100px边距
+    }
+
+    // 确保不滚动到页面顶部
+    targetScroll = Math.max(targetScroll, 200) // 最少保持200px距离顶部
+
+    // 平滑滚动
+    window.scrollTo({
+      top: targetScroll,
+      behavior: 'smooth'
+    })
+
+    console.log(`自然滚动: 从${currentScroll}px到${targetScroll}px`)
+  } catch (error) {
+    console.error('自然滚动失败:', error)
+    // 降级到简单滚动
+    element.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+}
+
+// 检查点赞状态
+async function checkLikeStatus(likeButton: Element): Promise<boolean> {
+  try {
+    // 检查按钮的状态变化
+    const buttonClasses = likeButton.className
+    const isLiked = buttonClasses.includes('liked') ||
+                   buttonClasses.includes('active') ||
+                   buttonClasses.includes('selected') ||
+                   likeButton.getAttribute('aria-pressed') === 'true'
+
+    // 检查按钮内的图标或文本变化
+    const buttonText = likeButton.textContent || ''
+    const hasLikedText = buttonText.includes('已赞') || buttonText.includes('取消赞')
+
+    // 检查按钮颜色变化（通过计算样式）
+    const computedStyle = window.getComputedStyle(likeButton)
+    const color = computedStyle.color
+    const isColorChanged = color !== 'rgb(0, 0, 0)' && color !== 'rgb(51, 51, 51)'
+
+    const result = isLiked || hasLikedText || isColorChanged
+    console.log(`点赞状态检查: 类名=${buttonClasses}, 文本="${buttonText}", 颜色=${color}, 结果=${result}`)
+
+    return result
+  } catch (error) {
+    console.error('检查点赞状态失败:', error)
+    return false // 检查失败时假设未成功
+  }
+}
+
+// 模拟真实用户浏览行为
+async function simulateUserBrowsing() {
+  sendProgress('📜 开始模拟页面滚动...', 'info')
+
+  // 随机滚动模拟用户浏览
+  const scrollSteps = 3 + Math.floor(Math.random() * 3) // 3-5次滚动
+
+  for (let i = 0; i < scrollSteps; i++) {
+    // 随机滚动距离
+    const scrollDistance = 200 + Math.random() * 400 // 200-600px
+    const currentScroll = window.scrollY
+
+    // 平滑滚动
+    window.scrollTo({
+      top: currentScroll + scrollDistance,
+      behavior: 'smooth'
+    })
+
+    sendProgress(`📜 滚动 ${i + 1}/${scrollSteps}: +${Math.round(scrollDistance)}px`, 'info')
+
+    // 随机停留时间，模拟阅读
+    const pauseTime = 1000 + Math.random() * 2000 // 1-3秒
+    await modernFinder.sleep(pauseTime)
+
+    // 检查是否触发验证码
+    if (modernFinder.detectCaptchaOrVerification()) {
+      sendProgress('🚨 滚动过程中检测到验证码，停止模拟', 'error')
+      break
+    }
+  }
+
+  // 随机向上滚动一点，模拟用户回看
+  const backScroll = Math.random() * 300
+  window.scrollTo({
+    top: Math.max(0, window.scrollY - backScroll),
+    behavior: 'smooth'
+  })
+
+  sendProgress('📜 滚动模拟完成，等待页面稳定...', 'info')
+  await modernFinder.sleep(5000) // 等待5秒稳定，更长的冷却时间
 }
 
 // 完成任务 - 添加上下文检查

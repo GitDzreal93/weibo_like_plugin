@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>链接优先级测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-case {
+            border: 1px solid #ddd;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .test-case h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .message {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 3px solid #1890ff;
+        }
+        .emoji {
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+        }
+        .expected {
+            background: #e6f7ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .instructions {
+            background: #fff2e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #fa8c16;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 微博聊天链接复制 - 优先级测试</h1>
+    
+    <div class="instructions">
+        <h3>📋 测试说明</h3>
+        <p>这个页面模拟微博聊天中的各种链接情况，用来测试链接复制功能是否能正确识别和优先选择微博链接而不是emoji图片链接。</p>
+        <p><strong>测试方法：</strong></p>
+        <ol>
+            <li>确保微博聊天链接复制插件已加载</li>
+            <li>查看每个测试用例中"网页链接"旁边是否出现复制按钮</li>
+            <li>点击复制按钮，检查复制的链接是否符合预期</li>
+            <li>将鼠标悬停在复制按钮上，查看tooltip显示的URL</li>
+        </ol>
+    </div>
+
+    <div class="test-case">
+        <h3>测试用例 1: emoji图片 + 微博链接</h3>
+        <div class="message">
+            <img src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png" alt="emoji" class="emoji">
+            <a href="https://weibo.com/6036398570/5176350752903605">网页链接</a>
+            <span>这是一条包含emoji和微博链接的消息</span>
+        </div>
+        <div class="expected">
+            ✅ 预期复制: https://weibo.com/6036398570/5176350752903605
+        </div>
+    </div>
+
+    <div class="test-case">
+        <h3>测试用例 2: 多个图片链接 + 微博链接</h3>
+        <div class="message">
+            <img src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png" alt="emoji1" class="emoji">
+            <img src="https://h5.sinaimg.cn/upload/2016/01/12/5/another_emoji.jpg" alt="emoji2" class="emoji">
+            <a href="https://weibo.com/u/1234567890/ABCDEFGHIJ">网页链接</a>
+            <span>多个图片和一个微博链接</span>
+        </div>
+        <div class="expected">
+            ✅ 预期复制: https://weibo.com/u/1234567890/ABCDEFGHIJ
+        </div>
+    </div>
+
+    <div class="test-case">
+        <h3>测试用例 3: emoji + 其他社交媒体链接</h3>
+        <div class="message">
+            <img src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png" alt="emoji" class="emoji">
+            <a href="https://twitter.com/user/status/1234567890">网页链接</a>
+            <span>包含Twitter链接的消息</span>
+        </div>
+        <div class="expected">
+            ✅ 预期复制: https://twitter.com/user/status/1234567890
+        </div>
+    </div>
+
+    <div class="test-case">
+        <h3>测试用例 4: emoji + 新闻链接</h3>
+        <div class="message">
+            <img src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png" alt="emoji" class="emoji">
+            <a href="https://news.sina.com.cn/article/12345.html">网页链接</a>
+            <span>包含新闻链接的消息</span>
+        </div>
+        <div class="expected">
+            ✅ 预期复制: https://news.sina.com.cn/article/12345.html
+        </div>
+    </div>
+
+    <div class="test-case">
+        <h3>测试用例 5: 只有图片链接</h3>
+        <div class="message">
+            <img src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png" alt="emoji" class="emoji">
+            <span>网页链接</span>
+            <span>只有图片链接的情况</span>
+        </div>
+        <div class="expected">
+            ⚠️ 预期复制: https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png (作为备选)
+        </div>
+    </div>
+
+    <div class="test-case">
+        <h3>测试用例 6: 文本中的微博链接</h3>
+        <div class="message">
+            <img src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png" alt="emoji" class="emoji">
+            <span>网页链接 https://weibo.com/7890123456/KLMNOPQRST 这是文本中的微博链接</span>
+        </div>
+        <div class="expected">
+            ✅ 预期复制: https://weibo.com/7890123456/KLMNOPQRST
+        </div>
+    </div>
+
+    <div class="test-case">
+        <h3>测试用例 7: 复杂混合情况</h3>
+        <div class="message">
+            <img src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png" alt="emoji1" class="emoji">
+            <img src="https://example.com/image.jpg" alt="image" class="emoji">
+            <a href="https://baidu.com">百度</a>
+            <a href="https://weibo.com/5555555555/XYXYXYXYXY">网页链接</a>
+            <span>复杂的混合情况，应该优先选择微博链接</span>
+        </div>
+        <div class="expected">
+            ✅ 预期复制: https://weibo.com/5555555555/XYXYXYXYXY
+        </div>
+    </div>
+
+    <script>
+        // 模拟微博聊天页面的URL
+        console.log('Test page loaded. Current URL:', window.location.href);
+        
+        // 添加一些调试信息
+        setTimeout(() => {
+            const copyButtons = document.querySelectorAll('.weibo-chat-copy-btn');
+            console.log(`Found ${copyButtons.length} copy buttons on the page`);
+            
+            if (copyButtons.length === 0) {
+                console.warn('No copy buttons found. Make sure the extension is loaded and this page matches the content script pattern.');
+            }
+        }, 2000);
+
+        // 为每个测试用例添加点击测试
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('weibo-chat-copy-btn')) {
+                console.log('Copy button clicked in test case');
+            }
+        });
+    </script>
+</body>
+</html>
